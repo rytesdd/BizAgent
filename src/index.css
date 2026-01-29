@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 12px;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* 禁止整页滚动，确保只有指定区域可以滚动 */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* 禁止滚动锚定，防止聊天区向上滚时被自动拉回底部 */
+.chat-scroll-no-anchor {
+  overflow-anchor: none;
+}
+
+/* 竖排文字 */
+.writing-mode-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* 强制全局所有文本、字符均为 12px（覆盖任何其他字号） */
+html {
+  font-size: 12px !important;
+}
+body,
+body *,
+input,
+textarea,
+button,
+select,
+span,
+p,
+h1, h2, h3, h4, h5, h6,
+label,
+div,
+a,
+li,
+td,
+th {
+  font-size: 12px !important;
+}
