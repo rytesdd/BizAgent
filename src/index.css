@@ -45,7 +45,7 @@ html, body {
 }
 /* 消息气泡容器背景 */
 .chat-panel-dark .ant-bubble-content {
-  background-color: rgba(61, 61, 61, 1);
+  background-color: rgba(15, 63, 204, 1);
   color: rgba(255, 255, 255, 0.8) !important;
 }
 
