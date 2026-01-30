@@ -276,6 +276,14 @@ export default function AiChatDashboard() {
     };
   }, [fetchData]);
 
+  // 监听配置更新（弹窗保存模型配置后刷新顶部 AI 状态）
+  useEffect(() => {
+    const unsubscribe = eventBus.on(EVENTS.CONFIG_UPDATED, () => {
+      fetchAiStatus();
+    });
+    return () => unsubscribe();
+  }, [fetchAiStatus]);
+
   // 监听 PRD 更新事件（新 PRD 对应新评论，清空旧评论）
   useEffect(() => {
     const unsubscribePrdUpdated = eventBus.on(EVENTS.PRD_UPDATED, (data) => {
