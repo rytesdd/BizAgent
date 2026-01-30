@@ -437,7 +437,7 @@ export default function AiChatDashboard() {
   };
 
   // 发送内容（供输入框与 Ant Design X Sender 共用）
-  const sendContent = useCallback(async (content) => {
+  const sendContent = async (content) => {
     const text = (typeof content === 'string' ? content : '').trim();
     if (!text || isGenerating) return;
 
@@ -467,7 +467,7 @@ export default function AiChatDashboard() {
       setIsGenerating(false);
       eventBus.emit(EVENTS.GENERATION_COMPLETED, {});
     }
-  }, [viewRole, isGenerating, handleCommand, isPrdGenerationCommand, runPrdGeneration, fetchData, addSystemMessage]);
+  };
 
   const handleSendMessage = async () => {
     await sendContent(inputValue);
