@@ -135,6 +135,7 @@ export default function AiChatDashboard() {
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const sessionDropdownRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   // 点击评论时滚动 PRD 到对应被评论原文位置
   const scrollToCommentInPrd = useCallback((commentId) => {
