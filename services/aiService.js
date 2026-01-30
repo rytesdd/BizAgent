@@ -807,6 +807,35 @@ ${description}
   logStep("PRD 流式生成完成");
 }
 
+/** 单次发给模型的文档长度上限（字符），避免超长卡死 */
+const REFORMAT_MAX_CHARS = 8000;
+
+/**
+ * 用本地模型对文档重新排版：分段、加小标题、列表等，意思不变
+ * @param {string} rawText - 从 PDF 等提取的原始文本
+ * @returns {Promise<string>} 重新排版后的文档
+ */
+async function reformatDocument(rawText) {
+  if (!rawText || typeof rawText !== "string") {
+    throw new Error("没有可整理的文档内容");
+  }
+  const text = rawText.length > REFORMAT_MAX_CHARS
+    ? rawText.slice(0, REFORMAT_MAX_CHARS) + "\n\n[后文过长已省略，仅整理前 " + REFORMAT_MAX_CHARS + " 字]"
+    : rawText;
+  logStep("开始用 AI 重新整理文档", { inputLength: rawText.length, sentLength: text.length });
+
+  const systemPrompt = "你是一个文档整理助手。把从 PDF 等提取的杂乱文本重新排版成结构清晰、分段合理、易读的文档。只做格式与结构优化（分段、小标题、列表等），不改变原意，不增删关键信息。用中文输出，使用 Markdown 格式。";
+  const userPrompt = `请对以下内容重新排版（分段、加小标题、列表等，意思不变）：\n\n${text}`;
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  const content = await callAI(messages, { temperature: 0.4, max_tokens: 8192 });
+  logStep("文档重新整理完成", { outputLength: content.length });
+  return content;
+}
+
 /**
  * 检测消息是否为 PRD 生成指令
  * @param {string} content - 用户消息内容
@@ -1052,6 +1081,7 @@ module.exports = {
   generatePRD,         // 生成 PRD 文档
   generatePRDStream,   // 流式生成 PRD 文档
   detectPRDCommand,    // 检测 PRD 生成指令
+  reformatDocument,    // 用 AI 对文档重新排版
 
   // 配置管理
   getProvider,
