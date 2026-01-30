@@ -521,42 +521,6 @@ function App({ isEmbedded = false }) {
                 </div>
               </div>
 
-              {/* Persona Config */}
-              <div className="mb-6 space-y-4">
-                <div>
-                  <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                    甲方人设
-                  </label>
-                  <input
-                    type="text"
-                    value={clientPersona}
-                    onChange={(e) => setClientPersona(e.target.value)}
-                    disabled={isLocked}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isEmbedded
-                        ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                        : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                    }`}
-                  />
-                </div>
-                <div>
-                  <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                    乙方人设
-                  </label>
-                  <input
-                    type="text"
-                    value={vendorPersona}
-                    onChange={(e) => setVendorPersona(e.target.value)}
-                    disabled={isLocked}
-                    className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isEmbedded
-                        ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                        : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                    }`}
-                  />
-                </div>
-              </div>
-
               {/* 模型配置区块 */}
               <div className={`mb-6 pt-4 border-t ${isEmbedded ? 'border-[#27272a]' : 'border-slate-200'}`}>
                 {/* 标题栏 - 可折叠 */}
