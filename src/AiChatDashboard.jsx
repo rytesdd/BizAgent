@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment, lazy, Suspense } from 'react';
 import axios from 'axios';
 import { IconAI, IconMenu, IconSend, IconAttachment, IconEmoji, IconPlus, IconTrash, IconChevronDown, IconCheck } from './svg-icons';
 import Modal from './components/Modal';
-import App from './App';
 import { eventBus, EVENTS } from './utils/eventBus';
+
+// 懒加载配置面板，避免与 App 的循环依赖导致 Vite HMR 500
+const AppConfig = lazy(() => import('./App').then(m => ({ default: m.default })));
 
 // 常量
 const AUTHOR_TYPES = {
