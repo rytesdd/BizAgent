@@ -109,6 +109,7 @@ export default function AiChatDashboard() {
   const [prdFileUrl, setPrdFileUrl] = useState(null);    // PDF 时用于 iframe src
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isReformatting, setIsReformatting] = useState(false);  // 用 AI 重新整理中
   const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true);
   
   // 全局视角切换
