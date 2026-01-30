@@ -45,7 +45,8 @@ html, body {
 }
 /* 消息气泡容器背景 */
 .chat-panel-dark .ant-bubble-content {
-  background: rgba(40, 58, 195, 1);
+  background-color: rgba(61, 61, 61, 1);
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 /* 聊天栏发送按钮背景（覆盖 Ant Design 主色） */
