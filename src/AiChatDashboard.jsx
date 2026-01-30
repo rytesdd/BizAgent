@@ -1115,19 +1115,57 @@ export default function AiChatDashboard() {
                           onClick={async () => {
                             if (isReformatting) return;
                             setIsReformatting(true);
+                            setPrdFileType(null);
+                            setPrdFileUrl(null);
+                            setPrdText('');
+                            let accumulated = '';
+                            const throttleMs = 80;
+                            let lastEmit = 0;
                             try {
-                              const res = await axios.post('/api/prd/reformat');
-                              if (res.data.success && res.data.data?.content) {
-                                setPrdText(res.data.data.content);
-                                setPrdFileType(null);
-                                setPrdFileUrl(null);
-                                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: res.data.data.content, source: 'manual' });
+                              const res = await fetch('/api/prd/reformat', { method: 'POST' });
+                              if (!res.ok) {
+                                const err = await res.json().catch(() => ({}));
+                                throw new Error(err.error || res.statusText);
+                              }
+                              const reader = res.body.getReader();
+                              const decoder = new TextDecoder();
+                              let buffer = '';
+                              while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                buffer += decoder.decode(value, { stream: true });
+                                const parts = buffer.split('\n\n');
+                                buffer = parts.pop() || '';
+                                for (const part of parts) {
+                                  const line = part.trim();
+                                  if (!line.startsWith('data: ')) continue;
+                                  try {
+                                    const payload = JSON.parse(line.slice(6));
+                                    if (payload.type === 'delta' && payload.content) {
+                                      accumulated += payload.content;
+                                      const now = Date.now();
+                                      if (now - lastEmit >= throttleMs) {
+                                        lastEmit = now;
+                                        setPrdText(accumulated);
+                                      }
+                                    } else if (payload.type === 'done') {
+                                      const finalContent = payload.content ?? accumulated;
+                                      setPrdText(finalContent);
+                                      eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: finalContent, source: 'manual' });
+                                      addSystemMessage('✅ 文档已用 AI 重新整理');
+                                    } else if (payload.type === 'error') {
+                                      addSystemMessage(`重新整理失败: ${payload.error || '未知错误'}`);
+                                    }
+                                  } catch (_) {}
+                                }
+                              }
+                              if (accumulated && !accumulated.match(/done/)) {
+                                setPrdText(accumulated);
+                                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'manual' });
                                 addSystemMessage('✅ 文档已用 AI 重新整理');
-                              } else {
-                                addSystemMessage(`重新整理失败: ${res.data.error || '未知错误'}`);
                               }
                             } catch (e) {
-                              addSystemMessage(`重新整理失败: ${e.response?.data?.error || e.message}`);
+                              addSystemMessage(`重新整理失败: ${e.message || e}`);
                             } finally {
                               setIsReformatting(false);
                             }
