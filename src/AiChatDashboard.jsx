@@ -765,7 +765,7 @@ export default function AiChatDashboard() {
     }
   };
 
-  // 获取聊天消息列表
+  // 获取聊天消息列表（原有逻辑，供非 X 组件或兼容使用）
   const getAllItems = () => {
     return currentMessages.map(msg => ({
       type: 'message',
@@ -776,6 +776,21 @@ export default function AiChatDashboard() {
       isError: msg.isError,
     })).sort((a, b) => new Date(a.time) - new Date(b.time));
   };
+
+  // Ant Design X Bubble.List 数据：key、role(user|ai|system)、content
+  const bubbleItems = useMemo(() => {
+    const sorted = [...currentMessages].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    return sorted.map((msg) => {
+      const role = msg.role === 'assistant' ? 'ai' : (msg.role === 'system' ? 'system' : 'user');
+      return {
+        key: msg.id,
+        role,
+        content: msg.content,
+        loading: isGenerating && role === 'ai' && sorted.indexOf(msg) === sorted.length - 1,
+        ...(msg.isError && { status: 'error' }),
+      };
+    });
+  }, [currentMessages, isGenerating]);
 
   // ============================================
   // 渲染
