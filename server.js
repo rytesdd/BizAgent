@@ -540,6 +540,31 @@ app.get("/api/file/serve", (req, res) => {
 });
 
 // ============================================
+// API: 用本地模型对当前 PRD 文档重新排版
+// ============================================
+
+app.post("/api/prd/reformat", async (req, res) => {
+  try {
+    const db = readDb();
+    const rawText = db.project_context?.prd_text || "";
+    if (!rawText.trim()) {
+      return res.status(400).json({ success: false, error: "当前没有可整理的文档内容" });
+    }
+    const content = await aiService.reformatDocument(rawText);
+    db.project_context = {
+      ...db.project_context,
+      prd_text: content,
+    };
+    writeDb(db);
+    logStep("PRD 重新整理已保存", { length: content.length });
+    res.json({ success: true, data: { content } });
+  } catch (error) {
+    logStep("PRD 重新整理失败", { error: String(error) });
+    res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// ============================================
 // API: 甲方审查文档
 // ============================================
 
