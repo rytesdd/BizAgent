@@ -1305,14 +1305,20 @@ export default function AiChatDashboard() {
                         : '乙方：可查看甲方评论，进行AI回复或真人回复'}
                     </div>
 
-                    {/* AI 审查文档 - 侧栏直接子元素 */}
+                    {/* AI 审查文档 - 预览区文本 ≥50 字时激活，根据当前预览内容生成评论 */}
                     {viewRole === 'client' && (
                       <button
                         onClick={triggerClientReview}
-                        disabled={isGenerating || !prdText}
+                        disabled={isGenerating || !prdText || prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW}
                         className={`w-[120px] h-8 px-3 py-2 text-sm ${currentRole.color.bgLight} ${currentRole.color.text} rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3`}
                         style={{ fontFamily: '"Noto Color Emoji"' }}
-                        title={!prdText ? '请先上传文档' : 'AI 审查文档'}
+                        title={
+                          !prdText?.trim()
+                            ? '请先在预览区输入或粘贴 PRD 内容'
+                            : prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW
+                              ? `预览区内容至少 ${MIN_PRD_LENGTH_FOR_REVIEW} 字后可进行 AI 审查`
+                              : '根据当前预览内容进行 AI 审查'
+                        }
                       >
                         AI 审查文档
                       </button>
