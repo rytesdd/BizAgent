@@ -509,6 +509,11 @@ function App({ isEmbedded = false }) {
                     <Upload className="h-4 w-4" />
                     上传文档
                   </button>
+                  {prdFile && (
+                    <p className={`mt-2 text-xs ${isEmbedded ? 'text-[#71717a]' : 'text-slate-500'}`}>
+                      已选择：{prdFile.name}，点击「保存配置」后解析文档
+                    </p>
+                  )}
                 </div>
               </div>
 
