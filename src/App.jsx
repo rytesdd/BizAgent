@@ -476,23 +476,8 @@ function App({ isEmbedded = false }) {
               {/* ========== 项目配置 Tab 内容 ========== */}
               {activeTab === 'project' && (
                 <>
-              {/* PRD Input */}
+              {/* PRD Input - 仅上传文档 */}
               <div className="mb-6">
-                <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                  PRD 文档
-                </label>
-                <textarea
-                  value={prdText}
-                  onChange={(e) => setPrdText(e.target.value)}
-                  placeholder="粘贴您的 PRD 文档内容..."
-                  disabled={isLocked}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isEmbedded
-                      ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                      : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
-                  }`}
-                  rows="8"
-                />
                 <div className="mt-2">
                   <input
                     type="file"
