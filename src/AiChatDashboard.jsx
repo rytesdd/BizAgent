@@ -1011,78 +1011,57 @@ export default function AiChatDashboard() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* 底部输入区 */}
+                {/* 底部输入区：Ant Design X Sender + 工具栏 */}
                 <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative shrink-0 w-full p-4">
+                  {/* 工具栏：生成prd、上传、表情 */}
+                  <div className="flex items-center gap-1 mb-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".txt,.md,.pdf"
+                      className="hidden"
+                    />
+                    {viewRole === 'vendor' && (
+                      <button
+                        type="button"
+                        onClick={handleGeneratePrd}
+                        disabled={isGenerating}
+                        className="rounded-lg px-3 py-1.5 text-sm font-medium bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="点击调用模型生成 PRD 文档"
+                      >
+                        生成prd
+                      </button>
+                    )}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors disabled:opacity-50"
+                      title="上传文档 (TXT/MD/PDF)"
+                    >
+                      <div className="size-4 text-[#71717b]">
+                        <IconAttachment />
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors"
+                      title="表情"
+                    >
+                      <div className="size-4 text-[#71717b]">
+                        <IconEmoji />
+                      </div>
+                    </button>
+                  </div>
                   <div className="bg-[#18181b] rounded-xl overflow-hidden">
-                    <textarea
-                      ref={textareaRef}
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={handleKeyDown}
+                    <Sender
                       placeholder={currentRole.chatPlaceholder}
                       disabled={isGenerating}
-                      className="w-full bg-transparent text-[#f4f4f5] placeholder-[#52525c] text-sm p-3 resize-none outline-none min-h-[60px] max-h-[120px]"
-                      rows={2}
+                      loading={isGenerating}
+                      onSubmit={(message) => sendContent(message)}
+                      submitType="enter"
                     />
-                    
-                    {/* 工具栏 */}
-                    <div className="flex items-center justify-between px-2 pb-2">
-                      <div className="flex gap-1 items-center">
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleFileSelect}
-                          accept=".txt,.md,.pdf"
-                          className="hidden"
-                        />
-                        {viewRole === 'vendor' && (
-                          <button
-                            type="button"
-                            onClick={handleGeneratePrd}
-                            disabled={isGenerating}
-                            className="rounded-lg px-3 py-1.5 text-sm font-medium bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="点击调用模型生成 PRD 文档"
-                          >
-                            生成prd
-                          </button>
-                        )}
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={isUploading}
-                          className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors disabled:opacity-50"
-                          title="上传文档 (TXT/MD/PDF)"
-                        >
-                          <div className="size-4 text-[#71717b]">
-                            <IconAttachment />
-                          </div>
-                        </button>
-                        <button
-                          className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors"
-                          title="表情"
-                        >
-                          <div className="size-4 text-[#71717b]">
-                            <IconEmoji />
-                          </div>
-                        </button>
-                      </div>
-                      
-                      {/* 发送按钮 */}
-                      <button
-                        onClick={handleSendMessage}
-                        disabled={!inputValue.trim() || isGenerating}
-                        className={`bg-[#3f3f46] hover:bg-[#52525c] rounded-lg size-8 flex items-center justify-center transition-all ${
-                          inputValue.trim() && !isGenerating
-                            ? 'opacity-100 cursor-pointer'
-                            : 'opacity-50 cursor-not-allowed'
-                        }`}
-                      >
-                        <div className="size-4 text-[#f4f4f5]">
-                          <IconSend />
-                        </div>
-                      </button>
-                    </div>
                   </div>
-                  
                   {uploadedFile && (
                     <div className="mt-2 text-xs text-[#71717b]">
                       📄 {uploadedFile.name}
