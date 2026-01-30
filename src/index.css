@@ -33,6 +33,17 @@ html, body {
   overflow-anchor: none;
 }
 
+/* 左侧聊天栏深色背景：气泡与输入框文字改为白色 */
+.chat-panel-dark .ant-bubble-content,
+.chat-panel-dark .ant-bubble-content *,
+.chat-panel-dark .ant-input,
+.chat-panel-dark textarea.ant-input {
+  color: #fff !important;
+}
+.chat-panel-dark .ant-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
 /* 竖排文字 */
 .writing-mode-vertical {
   writing-mode: vertical-rl;

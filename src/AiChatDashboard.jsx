@@ -874,7 +874,7 @@ export default function AiChatDashboard() {
       <div className="flex-1 flex overflow-hidden min-h-0">
               
               {/* ========== 左侧聊天栏 ========== */}
-              <div className="bg-[#18181b] border-[#27272a] border-r border-solid flex flex-col h-full items-start shadow-[0px_20px_25px_0px_rgba(0,0,0,0.2)] w-[30%] min-w-[360px] flex-shrink-0">
+              <div className="chat-panel-dark bg-[#18181b] border-[#27272a] border-r border-solid flex flex-col h-full items-start shadow-[0px_20px_25px_0px_rgba(0,0,0,0.2)] w-[30%] min-w-[360px] flex-shrink-0">
                 
                 {/* 顶部标题栏 - 根据视角变色 */}
                 <div className={`bg-[rgba(9,9,11,0.5)] border-b border-solid h-[61px] relative shrink-0 w-full ${currentRole.color.border}`}>
