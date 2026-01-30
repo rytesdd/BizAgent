@@ -274,15 +274,20 @@ function App({ isEmbedded = false }) {
   }
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setPrdFile(file)
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPrdFile(file)
+    const lower = file.name.toLowerCase()
+    if (lower.endsWith('.pdf')) {
+      setPrdText('')
+    } else {
       const reader = new FileReader()
       reader.onload = (event) => {
-        setPrdText(event.target.result)
+        setPrdText(event.target.result ?? '')
       }
       reader.readAsText(file)
     }
+    e.target.value = ''
   }
 
   const handleSavePersona = async () => {
@@ -463,7 +468,7 @@ function App({ isEmbedded = false }) {
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileChange}
-                    accept=".txt,.md,.doc,.docx"
+                    accept=".txt,.md,.pdf"
                     className="hidden"
                     disabled={isLocked}
                   />
