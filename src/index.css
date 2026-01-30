@@ -43,6 +43,10 @@ html, body {
 .chat-panel-dark .ant-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
+/* 消息气泡容器背景 */
+.chat-panel-dark .ant-bubble-content {
+  background: #999999;
+}
 
 /* 竖排文字 */
 .writing-mode-vertical {
