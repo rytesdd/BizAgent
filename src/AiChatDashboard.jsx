@@ -275,6 +275,12 @@ export default function AiChatDashboard() {
       if (data?.prdContent) {
         setPrdText(data.prdContent);
         setComments([]);
+        if (data.file_type != null) setPrdFileType(data.file_type);
+        if (data.file_path != null) setPrdFileUrl(`/api/file/serve?path=${encodeURIComponent(data.file_path)}`);
+        if (data.file_type == null && data.file_path == null) {
+          setPrdFileType(null);
+          setPrdFileUrl(null);
+        }
         console.log('PRD 已更新，来源:', data.source);
       }
     });
