@@ -445,6 +445,7 @@ export default function AiChatDashboard() {
     setInputValue('');
     setIsGenerating(true);
     eventBus.emit(EVENTS.GENERATION_STARTED, {});
+    abortControllerRef.current = new AbortController();
 
     try {
       if (text.startsWith('/')) {
@@ -457,17 +458,26 @@ export default function AiChatDashboard() {
           const response = await axios.post('/api/chat/send', {
             content: text,
             view_role: viewRole,
-          });
+          }, { signal: abortControllerRef.current.signal });
           if (response.data.success) await fetchData();
         }
       }
     } catch (error) {
+      if (axios.isCancel(error)) return;
       console.error('发送消息失败:', error);
       addSystemMessage(`发送失败: ${error.response?.data?.error || error.message}`);
     } finally {
+      abortControllerRef.current = null;
       setIsGenerating(false);
       eventBus.emit(EVENTS.GENERATION_COMPLETED, {});
     }
+  };
+
+  // 用户点击「暂停/停止」时取消当前请求并解锁 UI
+  const handleCancelGeneration = () => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    setIsGenerating(false);
+    eventBus.emit(EVENTS.GENERATION_COMPLETED, {});
   };
 
   const handleSendMessage = async () => {
@@ -1056,10 +1066,13 @@ export default function AiChatDashboard() {
                   </div>
                   <div className="bg-[#18181b] rounded-xl overflow-hidden">
                     <Sender
+                      value={inputValue}
+                      onChange={(v) => setInputValue(v ?? '')}
                       placeholder={currentRole.chatPlaceholder}
                       disabled={isGenerating}
                       loading={isGenerating}
                       onSubmit={(message) => sendContent(message)}
+                      onCancel={handleCancelGeneration}
                       submitType="enter"
                     />
                   </div>
