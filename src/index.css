@@ -43,10 +43,25 @@ html, body {
 .chat-panel-dark .ant-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
-/* 消息气泡容器背景 */
-.chat-panel-dark .ant-bubble-content {
-  background-color: rgba(15, 63, 204, 1);
-  color: rgba(255, 255, 255, 0.8) !important;
+/* 用户消息：背景 #282A2C，文字 #E3E3E3 */
+.chat-panel-dark .ant-bubble[role="user"] .ant-bubble-content,
+.chat-panel-dark .ant-bubble.ant-bubble-end .ant-bubble-content {
+  background-color: #282A2C;
+  color: #E3E3E3 !important;
+}
+.chat-panel-dark .ant-bubble[role="user"] .ant-bubble-content *,
+.chat-panel-dark .ant-bubble.ant-bubble-end .ant-bubble-content * {
+  color: #E3E3E3 !important;
+}
+/* AI 回复：透明背景，沿用聊天区域背景，文字 #E3E3E3 */
+.chat-panel-dark .ant-bubble[role="ai"] .ant-bubble-content,
+.chat-panel-dark .ant-bubble.ant-bubble-start .ant-bubble-content {
+  background-color: transparent;
+  color: #E3E3E3 !important;
+}
+.chat-panel-dark .ant-bubble[role="ai"] .ant-bubble-content *,
+.chat-panel-dark .ant-bubble.ant-bubble-start .ant-bubble-content * {
+  color: #E3E3E3 !important;
 }
 
 /* 聊天栏发送按钮背景（覆盖 Ant Design 主色） */
