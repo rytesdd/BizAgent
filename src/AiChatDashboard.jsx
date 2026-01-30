@@ -1217,51 +1217,36 @@ export default function AiChatDashboard() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4">
-                    {isPrdGenerating ? (
-                      <div className="text-[#52525c] text-center py-16">
-                        <div className="text-4xl mb-4 animate-pulse">📝</div>
-                        <p className="text-base mb-2 text-[#10b981]">正在生成 PRD 文档...</p>
-                        <p className="text-xs">AI 正在根据您的需求描述生成完整的 PRD 文档</p>
-                        <p className="text-xs mt-2 text-[#71717a]">这可能需要一些时间，请稍候</p>
+                  <div className="flex-1 overflow-auto min-h-0">
+                    {/* 优先级 1：正在整理且尚未产生内容 → 仅显示 AI 工作状态，严禁旧 PDF/空白 */}
+                    {isReformatting && !prdText ? (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-500 py-16">
+                        <div className="w-10 h-10 border-2 border-[#3f3f46] border-t-[#3b82f6] rounded-full animate-spin mb-4" aria-hidden />
+                        <p className="text-lg font-medium text-[#e4e4e7]">正在进行 AI 智能重排...</p>
+                        <p className="text-sm text-[#71717a] mt-2">正在解析文档结构并去除噪音，预计耗时 15-30 秒，请耐心等待。</p>
                       </div>
-                    ) : isReformatting && !prdText ? (
-                      <div className="text-[#52525c] text-center py-16">
-                        <div className="text-4xl mb-4 animate-pulse">✨</div>
-                        <p className="text-base mb-2 text-[#10b981]">正在用 AI 重新整理文档...</p>
-                        <p className="text-xs text-[#71717a]">请稍候，内容将逐段显示</p>
+                    ) : prdText ? (
+                      /* 优先级 2：有文本内容（含整理中流式）→ Markdown 渲染，支持字一个个蹦出 */
+                      <div className="prose prose-invert prose-sm max-w-none p-6 text-[#d4d4d8]">
+                        <ReactMarkdown>{prdText}</ReactMarkdown>
                       </div>
-                    ) : prdFileType === 'PDF' && prdFileUrl ? (
-                      <div className="w-full h-full min-h-[400px] rounded overflow-hidden bg-[#18181b]">
+                    ) : prdFileUrl && prdFileType === 'PDF' ? (
+                      /* 优先级 3：默认态且为 PDF → iframe 预览 */
+                      <div className="w-full h-full min-h-[400px] rounded overflow-hidden bg-[#18181b] p-4">
                         <iframe
                           title="PRD 文档 (PDF)"
                           src={prdFileUrl}
                           className="w-full h-full min-h-[400px] border-0"
                         />
                       </div>
-                    ) : prdText ? (
-                      <pre className="text-[#d4d4d8] text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                        {buildPrdSegments(prdText, comments).map((seg, i) =>
-                          seg.type === 'normal' ? (
-                            <Fragment key={i}>{seg.text}</Fragment>
-                          ) : (
-                            <span
-                              key={i}
-                              id={`comment-anchor-${seg.commentId}`}
-                              className="underline decoration-yellow-400 decoration-2 bg-yellow-500/10 rounded-sm"
-                            >
-                              {seg.text}
-                            </span>
-                          )
-                        )}
-                      </pre>
                     ) : (
-                      <div className="text-[#52525c] text-center py-16">
+                      /* 默认：暂无内容 */
+                      <div className="text-center mt-20 text-[#71717a]">
                         <div className="text-4xl mb-4">📄</div>
-                        <p className="text-base mb-2">暂无文档</p>
+                        <p className="text-base mb-2 text-[#a1a1aa]">暂无内容</p>
                         <p className="text-xs">点击左下角 📎 按钮上传</p>
                         {viewRole === 'vendor' && (
-                          <p className="text-xs mt-4 text-[#71717a]">
+                          <p className="text-xs mt-4 text-[#52525c]">
                             💡 乙方提示：在聊天中输入「生成PRD」指令可自动生成 PRD 文档
                           </p>
                         )}
