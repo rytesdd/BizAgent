@@ -504,10 +504,37 @@ app.post("/api/file/upload", upload.single("file"), async (req, res) => {
         type: result.type,
         metadata: result.metadata,
         file_name: originalName,
+        file_path: path.relative(__dirname, filePath),
       },
     });
   } catch (error) {
     logStep("文件上传解析失败", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 提供已上传文件（供 PRD 预览区展示 PDF）
+// ============================================
+
+app.get("/api/file/serve", (req, res) => {
+  try {
+    const relativePath = req.query.path;
+    if (!relativePath || typeof relativePath !== "string") {
+      return res.status(400).json({ success: false, error: "缺少 path 参数" });
+    }
+    const resolved = path.resolve(__dirname, relativePath);
+    const uploadDirResolved = path.resolve(UPLOAD_DIR);
+    if (!resolved.startsWith(uploadDirResolved)) {
+      return res.status(403).json({ success: false, error: "无权访问该文件" });
+    }
+    if (!fs.existsSync(resolved)) {
+      return res.status(404).json({ success: false, error: "文件不存在" });
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.sendFile(resolved);
+  } catch (error) {
+    logStep("文件服务失败", { error: String(error) });
     res.status(500).json({ success: false, error: String(error) });
   }
 });
