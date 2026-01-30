@@ -440,13 +440,14 @@ function App({ isEmbedded = false }) {
               <div className={`mb-6 flex rounded-lg border overflow-hidden ${
                 isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
               }`}>
+                {/* 主 Tab：选中态为下划线，与子 Tab 色块区分 */}
                 <button
                   onClick={() => setActiveTab('project')}
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     activeTab === 'project'
                       ? isEmbedded 
-                        ? 'bg-[#165dff]/20 text-[#165dff] border-r border-[#165dff]/30'
-                        : 'bg-primary/10 text-primary border-r border-primary/30'
+                        ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
+                        : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
                       : isEmbedded
                         ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
                         : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
@@ -460,8 +461,8 @@ function App({ isEmbedded = false }) {
                   className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     activeTab === 'ai'
                       ? isEmbedded 
-                        ? 'bg-[#165dff]/20 text-[#165dff]'
-                        : 'bg-primary/10 text-primary'
+                        ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
+                        : 'bg-white text-primary border-b-2 border-primary'
                       : isEmbedded
                         ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
                         : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
