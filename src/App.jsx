@@ -19,6 +19,7 @@ import {
   ConfigToggle,
   ConfigSelect,
   ConfigSectionTitle,
+  EmergencyDisconnectButton,
   DEFAULT_AI_CONFIG,
   DEFAULT_CLIENT_AI_CONFIG,
   DEFAULT_VENDOR_AI_CONFIG,
@@ -579,6 +580,8 @@ function App({ isEmbedded = false }) {
                 {/* 模型配置内容 */}
                 {showModelConfig && (
                   <div className="space-y-4">
+                    {/* 紧急断开：立即切 Mock 并刷新，打断 API 死循环 */}
+                    <EmergencyDisconnectButton />
                     {/* 提供商选择 */}
                     <div>
                       <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
