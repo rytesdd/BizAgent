@@ -476,8 +476,8 @@ app.post("/api/file/upload", upload.single("file"), async (req, res) => {
 
     logStep("收到文件上传", { originalName, size: req.file.size });
 
-    // 解析文件
-    const result = await fileParser.parseFile(filePath);
+    // 解析文件（传入原始文件名以便正确识别 PDF/TXT/MD，multer 保存路径无扩展名）
+    const result = await fileParser.parseFile(filePath, originalName);
 
     if (!result.success) {
       return res.status(400).json({ success: false, error: result.error });

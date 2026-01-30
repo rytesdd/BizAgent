@@ -61,16 +61,19 @@ function isSupportedFile(filePath) {
 
 /**
  * 解析文件内容
- * @param {string} filePath - 文件路径
+ * @param {string} filePath - 文件路径（multer 保存的路径可能无扩展名）
+ * @param {string} [originalFileName] - 原始文件名，用于类型检测（上传时务必传入，否则 PDF 等会判为 UNKNOWN）
  * @returns {Promise<{success: boolean, content?: string, error?: string, type?: string}>}
  */
-async function parseFile(filePath) {
+async function parseFile(filePath, originalFileName) {
   if (!fs.existsSync(filePath)) {
     return { success: false, error: "文件不存在" };
   }
 
-  const fileType = getFileType(filePath);
-  logStep(`开始解析文件`, { filePath, fileType });
+  const fileType = (originalFileName && getFileType(originalFileName) !== "UNKNOWN")
+    ? getFileType(originalFileName)
+    : getFileType(filePath);
+  logStep(`开始解析文件`, { filePath, fileType, originalFileName });
 
   try {
     switch (fileType) {
@@ -82,7 +85,7 @@ async function parseFile(filePath) {
         return await parsePdfFile(filePath);
 
       default:
-        return { success: false, error: `不支持的文件类型: ${path.extname(filePath)}` };
+        return { success: false, error: `不支持的文件类型: ${originalFileName ? path.extname(originalFileName) || originalFileName : path.extname(filePath)}` };
     }
   } catch (error) {
     logStep(`解析失败`, { error: error.message });
