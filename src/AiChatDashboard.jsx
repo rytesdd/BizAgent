@@ -1144,22 +1144,22 @@ export default function AiChatDashboard() {
                         : '乙方：可查看甲方评论，进行AI回复或真人回复'}
                     </div>
 
-                    {/* 甲方快捷操作栏 */}
+                    {/* AI 审查文档 - 侧栏直接子元素 */}
                     {viewRole === 'client' && (
-                      <div className="px-4 py-2 border-b border-[#27272a]">
-                        <button
-                          onClick={triggerClientReview}
-                          disabled={isGenerating || !prdText}
-                          className={`w-full px-3 py-2 text-sm ${currentRole.color.bgLight} ${currentRole.color.text} rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2`}
-                          title={!prdText ? '请先上传文档' : 'AI 审查文档'}
-                        >
-                          AI 审查文档
-                        </button>
-                      </div>
+                      <button
+                        onClick={triggerClientReview}
+                        disabled={isGenerating || !prdText}
+                        className={`w-[120px] h-8 px-3 py-2 text-sm ${currentRole.color.bgLight} ${currentRole.color.text} rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3`}
+                        style={{ fontFamily: '"Noto Color Emoji"' }}
+                        title={!prdText ? '请先上传文档' : 'AI 审查文档'}
+                      >
+                        AI 审查文档
+                      </button>
                     )}
 
                     {/* 评论列表 */}
-                    <div className="flex-1 overflow-y-auto min-h-0">
+                    <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative shrink-0 w-full p-4">
+                      <div className="flex-1 overflow-y-auto min-h-0">
                       {comments.length === 0 ? (
                         <div className="text-[#52525c] text-center py-12 px-4">
                           <p className="text-sm">暂无评论</p>
