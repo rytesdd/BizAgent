@@ -483,6 +483,11 @@ app.post("/api/file/upload", upload.single("file"), async (req, res) => {
       return res.status(400).json({ success: false, error: result.error });
     }
 
+    if (result.type === "PDF") {
+      result.content = await aiService.structureDocument(result.content);
+      logStep("已完成 PDF 智能重排与清洗");
+    }
+
     // 保存到数据库（新 PRD 替换旧文档，评论仅跟随当前 PRD，故清空旧评论）
     const db = readDb();
     db.project_context = {
