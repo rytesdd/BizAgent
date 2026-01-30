@@ -1069,7 +1069,6 @@ export default function AiChatDashboard() {
                       value={inputValue}
                       onChange={(v) => setInputValue(v ?? '')}
                       placeholder={currentRole.chatPlaceholder}
-                      disabled={isGenerating}
                       loading={isGenerating}
                       onSubmit={(message) => sendContent(message)}
                       onCancel={handleCancelGeneration}
