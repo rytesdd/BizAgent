@@ -1108,6 +1108,37 @@ export default function AiChatDashboard() {
                       <span>PRD 文档预览</span>
                       <span className="text-[#52525c]">（甲乙方共享）</span>
                     </div>
+                    <div className="flex items-center gap-2">
+                      {prdText && !isPrdGenerating && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (isReformatting) return;
+                            setIsReformatting(true);
+                            try {
+                              const res = await axios.post('/api/prd/reformat');
+                              if (res.data.success && res.data.data?.content) {
+                                setPrdText(res.data.data.content);
+                                setPrdFileType(null);
+                                setPrdFileUrl(null);
+                                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: res.data.data.content, source: 'manual' });
+                                addSystemMessage('✅ 文档已用 AI 重新整理');
+                              } else {
+                                addSystemMessage(`重新整理失败: ${res.data.error || '未知错误'}`);
+                              }
+                            } catch (e) {
+                              addSystemMessage(`重新整理失败: ${e.response?.data?.error || e.message}`);
+                            } finally {
+                              setIsReformatting(false);
+                            }
+                          }}
+                          disabled={isReformatting}
+                          className="rounded-md px-2 py-1 text-xs font-medium bg-[#27272a] text-[#a1a1aa] hover:bg-[#3f3f46] disabled:opacity-50"
+                        >
+                          {isReformatting ? '整理中...' : '用 AI 重新整理'}
+                        </button>
+                      )}
+                    </div>
                     {/* PRD 生成中状态指示器 */}
                     {isPrdGenerating && (
                       <div className="flex items-center gap-2 text-[#10b981]">
