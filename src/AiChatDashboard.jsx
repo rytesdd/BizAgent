@@ -1119,6 +1119,7 @@ export default function AiChatDashboard() {
                             setPrdFileUrl(null);
                             setPrdText('');
                             let accumulated = '';
+                            let receivedDone = false;
                             const throttleMs = 80;
                             let lastEmit = 0;
                             try {
@@ -1149,6 +1150,7 @@ export default function AiChatDashboard() {
                                         setPrdText(accumulated);
                                       }
                                     } else if (payload.type === 'done') {
+                                      receivedDone = true;
                                       const finalContent = payload.content ?? accumulated;
                                       setPrdText(finalContent);
                                       eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: finalContent, source: 'manual' });
@@ -1158,6 +1160,36 @@ export default function AiChatDashboard() {
                                     }
                                   } catch (_) {}
                                 }
+                              }
+                              // 1. 刷新解码器，确保无残留字节
+                              buffer += decoder.decode();
+                              // 2. 处理残留 buffer 中的最后一条消息（通常为 type: 'done'）
+                              if (buffer.trim()) {
+                                const parts = buffer.split('\n\n');
+                                for (const part of parts) {
+                                  const line = part.trim();
+                                  if (!line.startsWith('data: ')) continue;
+                                  try {
+                                    const payload = JSON.parse(line.slice(6));
+                                    if (payload.type === 'delta' && payload.content) {
+                                      accumulated += payload.content;
+                                      setPrdText(accumulated);
+                                    } else if (payload.type === 'done') {
+                                      receivedDone = true;
+                                      const finalContent = payload.content ?? accumulated;
+                                      setPrdText(finalContent);
+                                      eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: finalContent, source: 'manual' });
+                                      addSystemMessage('✅ 文档已用 AI 重新整理');
+                                    } else if (payload.type === 'error') {
+                                      addSystemMessage(`重新整理失败: ${payload.error || '未知错误'}`);
+                                    }
+                                  } catch (_) {}
+                                }
+                              }
+                              // 3. 兜底：若从未收到 done，用已累积内容更新 UI，防止空白
+                              if (!receivedDone && accumulated) {
+                                setPrdText(accumulated);
+                                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'manual' });
                               }
                             } catch (e) {
                               addSystemMessage(`重新整理失败: ${e.message || e}`);
