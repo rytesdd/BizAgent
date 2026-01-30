@@ -1158,8 +1158,7 @@ export default function AiChatDashboard() {
                     )}
 
                     {/* 评论列表 */}
-                    <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative shrink-0 w-full p-4">
-                      <div className="flex-1 overflow-y-auto min-h-0">
+                    <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative w-full p-4 flex-1 overflow-y-auto min-h-0">
                       {comments.length === 0 ? (
                         <div className="text-[#52525c] text-center py-12 px-4">
                           <p className="text-sm">暂无评论</p>
