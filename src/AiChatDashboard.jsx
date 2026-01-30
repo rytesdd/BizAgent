@@ -436,26 +436,25 @@ export default function AiChatDashboard() {
     }
   };
 
-  const handleSendMessage = async () => {
-    const content = inputValue.trim();
-    if (!content || isGenerating) return;
+  // 发送内容（供输入框与 Ant Design X Sender 共用）
+  const sendContent = useCallback(async (content) => {
+    const text = (typeof content === 'string' ? content : '').trim();
+    if (!text || isGenerating) return;
 
     setInputValue('');
     setIsGenerating(true);
     eventBus.emit(EVENTS.GENERATION_STARTED, {});
 
     try {
-      // 检测是否是命令
-      if (content.startsWith('/')) {
-        await handleCommand(content);
+      if (text.startsWith('/')) {
+        await handleCommand(text);
       } else {
-        const isPrdCommand = viewRole === 'vendor' && isPrdGenerationCommand(content);
+        const isPrdCommand = viewRole === 'vendor' && isPrdGenerationCommand(text);
         if (isPrdCommand) {
-          await runPrdGeneration(content);
+          await runPrdGeneration(text);
         } else {
-          // 普通聊天消息
           const response = await axios.post('/api/chat/send', {
-            content,
+            content: text,
             view_role: viewRole,
           });
           if (response.data.success) await fetchData();
@@ -468,6 +467,10 @@ export default function AiChatDashboard() {
       setIsGenerating(false);
       eventBus.emit(EVENTS.GENERATION_COMPLETED, {});
     }
+  }, [viewRole, isGenerating, handleCommand, isPrdGenerationCommand, runPrdGeneration, fetchData, addSystemMessage]);
+
+  const handleSendMessage = async () => {
+    await sendContent(inputValue);
   };
 
   // 处理命令
