@@ -1235,7 +1235,7 @@ export default function AiChatDashboard() {
                       </div>
                     ) : prdText ? (
                       /* 优先级 2：有文本内容（含整理中流式）→ Markdown 渲染，支持字一个个蹦出 */
-                      <div className="prose prose-invert prose-sm max-w-none p-6 text-[#d4d4d8]">
+                      <div className="p-6 text-[#d4d4d8] text-sm leading-relaxed [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-medium [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_pre]:bg-[#27272a] [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-auto">
                         <ReactMarkdown>{prdText}</ReactMarkdown>
                       </div>
                     ) : prdFileUrl && prdFileType === 'PDF' ? (
