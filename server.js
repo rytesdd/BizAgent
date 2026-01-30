@@ -540,7 +540,7 @@ app.get("/api/file/serve", (req, res) => {
 });
 
 // ============================================
-// API: 用本地模型对当前 PRD 文档重新排版
+// API: 用本地模型对当前 PRD 文档重新排版（流式 SSE）
 // ============================================
 
 app.post("/api/prd/reformat", async (req, res) => {
@@ -550,14 +550,29 @@ app.post("/api/prd/reformat", async (req, res) => {
     if (!rawText.trim()) {
       return res.status(400).json({ success: false, error: "当前没有可整理的文档内容" });
     }
-    const content = await aiService.reformatDocument(rawText);
-    db.project_context = {
-      ...db.project_context,
-      prd_text: content,
-    };
-    writeDb(db);
-    logStep("PRD 重新整理已保存", { length: content.length });
-    res.json({ success: true, data: { content } });
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    let fullContent = "";
+    try {
+      for await (const chunk of aiService.reformatDocumentStream(rawText)) {
+        fullContent += chunk;
+        res.write("data: " + JSON.stringify({ type: "delta", content: chunk }) + "\n\n");
+      }
+      const dbWrite = readDb();
+      dbWrite.project_context = { ...dbWrite.project_context, prd_text: fullContent };
+      writeDb(dbWrite);
+      logStep("PRD 重新整理已保存（流式）", { length: fullContent.length });
+      res.write("data: " + JSON.stringify({ type: "done", content: fullContent }) + "\n\n");
+    } catch (streamErr) {
+      logStep("PRD 流式重新整理失败", { error: String(streamErr) });
+      res.write("data: " + JSON.stringify({ type: "error", error: streamErr.message || String(streamErr) }) + "\n\n");
+    }
+    res.end();
   } catch (error) {
     logStep("PRD 重新整理失败", { error: String(error) });
     res.status(500).json({ success: false, error: error.message || String(error) });
