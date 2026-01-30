@@ -1094,6 +1094,43 @@ async function getOllamaModels() {
 }
 
 // ============================================
+// PDF 脏数据清洗（断行修复、去噪）
+// ============================================
+
+/**
+ * PDF 内容智能重排：修复断行、去除页眉页脚页码、输出结构化 Markdown
+ * @param {string} rawText - 从 PDF 识别出的混乱文本
+ * @returns {Promise<string>} 结构清晰的 Markdown
+ */
+async function structureDocument(rawText) {
+  if (!rawText || typeof rawText !== "string") {
+    throw new Error("没有可清洗的文档内容");
+  }
+  const text = rawText.length > REFORMAT_MAX_CHARS
+    ? rawText.slice(0, REFORMAT_MAX_CHARS) + "\n\n[后文过长已省略，仅处理前 " + REFORMAT_MAX_CHARS + " 字]"
+    : rawText;
+  logStep("开始 PDF 智能重排与清洗", { inputLength: rawText.length, sentLength: text.length });
+
+  const systemPrompt = `你是一个专业的 PDF 文档还原专家。
+你的任务是：接收从 PDF 识别出的混乱文本，输出结构清晰的 Markdown。
+
+关键处理：
+1. 修复断行：PDF 经常把一句话强行切成两行，请务必根据语义将它们合并成完整句子。
+2. 去除噪音：删除页眉、页脚、页码（如 "Page 1 of 10"）、水印文字等与正文无关的内容。
+3. 保留原意：严禁修改原文的任何数据、数值或核心表述，只做格式与噪音清理。`;
+
+  const userPrompt = `请对以下从 PDF 识别出的文本进行重排与清洗，输出结构清晰的 Markdown：\n\n${text}`;
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  const content = await callAI(messages, { temperature: 0.4, max_tokens: 8192 });
+  logStep("PDF 智能重排与清洗完成", { outputLength: content.length });
+  return content;
+}
+
+// ============================================
 // 导出
 // ============================================
 
@@ -1108,6 +1145,7 @@ module.exports = {
   detectPRDCommand,    // 检测 PRD 生成指令
   reformatDocument,       // 用 AI 对文档重新排版（一次性）
   reformatDocumentStream, // 流式重新排版（供 SSE）
+  structureDocument,   // PDF 脏数据清洗（断行修复、去噪、结构化 Markdown）
 
   // 配置管理
   getProvider,
