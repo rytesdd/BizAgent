@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback, Fragment, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, Fragment, lazy, Suspense, useMemo } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import { Bubble, Sender } from '@ant-design/x';
 import { IconAI, IconMenu, IconSend, IconAttachment, IconEmoji, IconPlus, IconTrash, IconChevronDown, IconCheck } from './svg-icons';
 import Modal from './components/Modal';
 import { eventBus, EVENTS } from './utils/eventBus';
