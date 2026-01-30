@@ -1003,6 +1003,7 @@ export default function AiChatDashboard() {
                   ) : (
                     <Bubble.List
                       items={bubbleItems}
+                      role={{ user: { placement: 'end' }, ai: { placement: 'start' } }}
                       autoScroll
                       className="h-full"
                       style={{ minHeight: 200 }}
