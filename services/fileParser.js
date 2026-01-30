@@ -112,7 +112,37 @@ async function parseTextFile(filePath, type) {
 }
 
 /**
- * 解析 PDF 文件
+ * 清洗 PDF 提取的文本：去除 URL、多余空白、乱码/特殊符号，得到纯文本
+ * @param {string} text - 原始文本
+ * @returns {string} 清洗后的纯文本
+ */
+function cleanPdfText(text) {
+  if (!text || typeof text !== "string") return "";
+
+  let cleaned = text;
+
+  // 1. 删除 URL：http(s)://... 或 www....
+  cleaned = cleaned.replace(/https?:\/\/[^\s]+/gi, "");
+  cleaned = cleaned.replace(/www\.[^\s]+/gi, "");
+
+  // 2. 删除多余空白：多个换行/空格/制表符合并为一个空格，再 trim 每行
+  cleaned = cleaned
+    .split(/\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n");
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n"); // 最多保留连续两个换行
+  cleaned = cleaned.replace(/^\s+|\s+$/g, "");
+
+  // 3. 去除常见乱码/特殊符号（替换字符、零宽字符、控制字符等）
+  cleaned = cleaned.replace(/\uFFFD/g, ""); // 替换字符
+  cleaned = cleaned.replace(/[\u200B-\u200D\uFEFF]/g, ""); // 零宽空格等
+  cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ""); // 控制字符
+
+  return cleaned;
+}
+
+/**
+ * 解析 PDF 文件（pdf-parse 仅提取文本，图片已默认忽略）
  */
 async function parsePdfFile(filePath) {
   if (!pdfParse) {
@@ -125,18 +155,22 @@ async function parsePdfFile(filePath) {
   const dataBuffer = fs.readFileSync(filePath);
   const data = await pdfParse(dataBuffer);
 
+  const rawText = data.text;
+  const content = cleanPdfText(rawText);
+
   logStep(`PDF 解析成功`, {
     pages: data.numpages,
-    length: data.text.length,
+    length: rawText.length,
+    cleanedLength: content.length,
   });
 
   return {
     success: true,
-    content: data.text,
+    content,
     type: "PDF",
     metadata: {
       pages: data.numpages,
-      characters: data.text.length,
+      characters: content.length,
       info: data.info,
     },
   };
