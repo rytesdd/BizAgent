@@ -982,7 +982,7 @@ export default function AiChatDashboard() {
                   </div>
                 </div>
 
-                {/* 消息列表 */}
+                {/* 消息列表：Ant Design X Bubble.List */}
                 <div
                   ref={chatScrollRef}
                   className="flex-1 min-h-0 relative w-full overflow-y-auto p-4 chat-scroll-no-anchor"
@@ -994,59 +994,20 @@ export default function AiChatDashboard() {
                     };
                   }}
                 >
-                  {getAllItems().length === 0 ? (
+                  {bubbleItems.length === 0 && !isGenerating ? (
                     <div className="text-center text-[#52525c] py-8">
-                      <div className={`text-4xl mb-4`}>{currentRole.emoji}</div>
+                      <div className="text-4xl mb-4">{currentRole.emoji}</div>
                       <p className="mb-2">{currentRole.name}聊天</p>
                       <p className="text-xs">输入 /help 查看可用命令</p>
                     </div>
                   ) : (
-                    getAllItems().map((item) => (
-                      <div key={item.id} className={`flex flex-col gap-1 mb-4 ${
-                        item.role === 'user' ? 'items-end' : 'items-start'
-                      }`}>
-                        {/* 消息气泡 */}
-                        <div className={`min-h-[40px] max-w-[85%] rounded-2xl p-3 ${
-                          item.role === 'user'
-                            ? 'bg-[#3f3f46] rounded-tr-md'
-                            : item.role === 'system'
-                            ? 'bg-[#27272a] border border-[#3f3f46]'
-                            : 'bg-[#27272a] border border-[#3f3f46] rounded-tl-md'
-                        } ${item.isError ? 'border-red-500/50' : ''}`}>
-                          <p className={`text-sm leading-relaxed whitespace-pre-wrap ${
-                            item.role === 'user'
-                              ? 'text-white'
-                              : item.isError
-                              ? 'text-red-400'
-                              : 'text-[#e4e4e7]'
-                          }`}>
-                            {item.content}
-                          </p>
-                        </div>
-                        
-                        {/* 时间戳 */}
-                        <div className={`text-[#71717b] text-[10px] ${
-                          item.role === 'user' ? 'mr-1' : 'ml-1'
-                        }`}>
-                          {formatTime(item.time)}
-                        </div>
-                      </div>
-                    ))
+                    <Bubble.List
+                      items={bubbleItems}
+                      autoScroll
+                      className="h-full"
+                      style={{ minHeight: 200 }}
+                    />
                   )}
-                  
-                  {/* 生成中指示器 */}
-                  {isGenerating && (
-                    <div className="flex items-start gap-2 mb-4">
-                      <div className="bg-[#27272a] rounded-2xl rounded-tl-md p-3">
-                        <div className="flex gap-1">
-                          <div className={`w-2 h-2 ${currentRole.color.bg} rounded-full animate-bounce`} style={{ animationDelay: '0ms' }} />
-                          <div className={`w-2 h-2 ${currentRole.color.bg} rounded-full animate-bounce`} style={{ animationDelay: '150ms' }} />
-                          <div className={`w-2 h-2 ${currentRole.color.bg} rounded-full animate-bounce`} style={{ animationDelay: '300ms' }} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
                   <div ref={messagesEndRef} />
                 </div>
 
