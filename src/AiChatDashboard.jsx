@@ -1331,7 +1331,7 @@ export default function AiChatDashboard() {
                           <p className="text-sm">暂无评论</p>
                           <p className="text-xs mt-2">
                             {viewRole === 'client' 
-                              ? '上传文档后点击"AI 审查文档"开始'
+                              ? `预览区文本满 ${MIN_PRD_LENGTH_FOR_REVIEW} 字后点击「AI 审查文档」开始`
                               : '等待甲方发起评论'}
                           </p>
                         </div>
