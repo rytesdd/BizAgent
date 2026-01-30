@@ -105,6 +105,8 @@ export default function AiChatDashboard() {
   const [comments, setComments] = useState([]);
   const [aiStatus, setAiStatus] = useState(null);
   const [prdText, setPrdText] = useState('');
+  const [prdFileType, setPrdFileType] = useState(null);   // 'PDF' | 'TXT' | 'MD' | null，用于预览区展示 PDF
+  const [prdFileUrl, setPrdFileUrl] = useState(null);    // PDF 时用于 iframe src
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true);
@@ -200,7 +202,12 @@ export default function AiChatDashboard() {
         setComments(commentsRes.data.data.comments || []);
       }
       if (dbRes.data.success) {
-        setPrdText(dbRes.data.data.project_context?.prd_text || '');
+        const ctx = dbRes.data.data.project_context;
+        setPrdText(ctx?.prd_text || '');
+        setPrdFileType(ctx?.file_type || null);
+        setPrdFileUrl(ctx?.prd_file_path
+          ? `/api/file/serve?path=${encodeURIComponent(ctx.prd_file_path)}`
+          : null);
       }
       // 会话列表
       if (clientSessionsRes.data.success) {
@@ -662,8 +669,10 @@ export default function AiChatDashboard() {
       });
 
       if (response.data.success) {
-        const { content, type, metadata, file_name } = response.data.data;
+        const { content, type, metadata, file_name, file_path } = response.data.data;
         setPrdText(content);
+        setPrdFileType(type || null);
+        setPrdFileUrl(file_path ? `/api/file/serve?path=${encodeURIComponent(file_path)}` : null);
 
         const metaInfo = metadata 
           ? `（${type} 格式，${metadata.pages ? metadata.pages + ' 页，' : ''}${metadata.characters || content.length} 字符）`
