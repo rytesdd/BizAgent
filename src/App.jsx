@@ -308,13 +308,16 @@ function App({ isEmbedded = false }) {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
         if (uploadRes.data.success) {
-          finalPrdText = uploadRes.data.data.content ?? ''
+          const { content, file_name, file_type, file_path } = uploadRes.data.data
+          finalPrdText = content ?? ''
           setPrdText(finalPrdText)
           setPrdFile(null)
           eventBus.emit(EVENTS.PRD_UPDATED, {
             prdContent: finalPrdText,
             source: 'manual',
-            description: uploadRes.data.data.file_name,
+            description: file_name,
+            file_type: file_type || null,
+            file_path: file_path || null,
           })
         } else {
           showToast(uploadRes.data.error || '文档解析失败', 'error')
