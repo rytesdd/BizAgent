@@ -230,16 +230,16 @@ export default function AiChatDashboard() {
     fetchData();
   }, [fetchAiStatus, fetchData]);
 
-  // 轮询
+  // 轮询（整理期间暂停拉取，避免覆盖流式内容）
   useEffect(() => {
     const pollInterval = setInterval(() => {
-      if (!isGenerating) {
+      if (!isGenerating && !isReformatting) {
         fetchData();
       }
     }, POLL_INTERVAL);
 
     return () => clearInterval(pollInterval);
-  }, [fetchData, isGenerating]);
+  }, [fetchData, isGenerating, isReformatting]);
 
   // 聊天区：消息/视角更新后若用户不在底部，恢复滚动位置（不自动回到底部）
   useEffect(() => {
