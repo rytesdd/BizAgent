@@ -1121,6 +1121,14 @@ export default function AiChatDashboard() {
                         <p className="text-xs">AI 正在根据您的需求描述生成完整的 PRD 文档</p>
                         <p className="text-xs mt-2 text-[#71717a]">这可能需要一些时间，请稍候</p>
                       </div>
+                    ) : prdFileType === 'PDF' && prdFileUrl ? (
+                      <div className="w-full h-full min-h-[400px] rounded overflow-hidden bg-[#18181b]">
+                        <iframe
+                          title="PRD 文档 (PDF)"
+                          src={prdFileUrl}
+                          className="w-full h-full min-h-[400px] border-0"
+                        />
+                      </div>
                     ) : prdText ? (
                       <pre className="text-[#d4d4d8] text-sm whitespace-pre-wrap font-sans leading-relaxed">
                         {buildPrdSegments(prdText, comments).map((seg, i) =>
