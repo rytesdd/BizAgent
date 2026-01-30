@@ -780,7 +780,7 @@ export default function AiChatDashboard() {
   // Ant Design X Bubble.List 数据：key、role(user|ai|system)、content
   const bubbleItems = useMemo(() => {
     const sorted = [...currentMessages].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-    return sorted.map((msg) => {
+    const list = sorted.map((msg) => {
       const role = msg.role === 'assistant' ? 'ai' : (msg.role === 'system' ? 'system' : 'user');
       return {
         key: msg.id,
@@ -790,6 +790,10 @@ export default function AiChatDashboard() {
         ...(msg.isError && { status: 'error' }),
       };
     });
+    if (list.length === 0 && isGenerating) {
+      list.push({ key: 'loading', role: 'ai', content: '', loading: true });
+    }
+    return list;
   }, [currentMessages, isGenerating]);
 
   // ============================================
