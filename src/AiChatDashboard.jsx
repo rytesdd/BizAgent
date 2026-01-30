@@ -1,13 +1,28 @@
 import { useState, useEffect, useRef, useCallback, Fragment, lazy, Suspense, useMemo } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import { Bubble, Sender } from '@ant-design/x';
 import { IconAI, IconMenu, IconSend, IconAttachment, IconEmoji, IconPlus, IconTrash, IconChevronDown, IconCheck } from './svg-icons';
-import Modal from './components/Modal';
+import Drawer from './components/Drawer';
 import { eventBus, EVENTS } from './utils/eventBus';
 
 // 懒加载配置面板，避免与 App 的循环依赖导致 Vite HMR 500
 const AppConfig = lazy(() => import('./App').then(m => ({ default: m.default })));
+
+/**
+ * 评论项（Comment Item）数据结构约定（Mock / 类型）
+ * @typedef {Object} CommentItem
+ * @property {string} id - 评论 ID
+ * @property {string} content - 评论内容
+ * @property {string} [quote] - 该评论针对的原文片段（与 quoted_text 二选一或并存，优先使用）
+ * @property {string} [quoted_text] - 同上，后端常用字段
+ * @property {string} [risk_level]
+ * @property {string} [author_type]
+ * @property {string} [created_at]
+ * @property {string} [reply_content]
+ * @property {string} [reply_author_type]
+ */
 
 // 常量
 const AUTHOR_TYPES = {
@@ -34,12 +49,12 @@ const UNIFIED_COLORS = {
   border: 'border-[#3f3f46]',
 };
 
-// 根据 comments 的 quoted_text 在 prdText 中构建「普通 / 高亮」片段，用于黄色下划线 + 锚点定位
+// 根据 comments 的 quote / quoted_text 在 prdText 中构建「普通 / 高亮」片段，用于黄色下划线 + 锚点定位
 function buildPrdSegments(prdText, comments) {
   if (!prdText) return [];
   const ranges = [];
   (comments || []).forEach((comment) => {
-    const qt = (comment.quoted_text || '').trim();
+    const qt = (comment.quote ?? comment.quoted_text ?? '').trim();
     if (!qt) return;
     let start = prdText.indexOf(qt);
     while (start >= 0) {
@@ -69,6 +84,30 @@ function buildPrdSegments(prdText, comments) {
   });
   if (pos < prdText.length) segments.push({ type: 'normal', text: prdText.slice(pos) });
   return segments.length ? segments : [{ type: 'normal', text: prdText }];
+}
+
+function escapeHtml(s) {
+  if (typeof s !== 'string') return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** 将 prdText 与 comments 结合，生成带高亮锚点的 Markdown 字符串（供 ReactMarkdown + rehype-raw 渲染） */
+function buildPrdMarkdownWithHighlights(prdText, comments) {
+  if (!prdText) return '';
+  const segments = buildPrdSegments(prdText, comments);
+  let out = '';
+  for (const seg of segments) {
+    if (seg.type === 'normal') {
+      out += seg.text;
+    } else {
+      out += `<span id="comment-${seg.commentId}" class="highlight-target">${escapeHtml(seg.text)}</span>`;
+    }
+  }
+  return out;
 }
 
 // 视角配置
@@ -115,7 +154,9 @@ export default function AiChatDashboard() {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isReformatting, setIsReformatting] = useState(false);  // 用 AI 重新整理中
+  const [isReviewing, setIsReviewing] = useState(false);        // 甲方 AI 审查文档中
   const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true);
+  const [activeCommentId, setActiveCommentId] = useState(null);
   
   // 全局视角切换
   const [viewRole, setViewRole] = useState('client');
@@ -137,11 +178,27 @@ export default function AiChatDashboard() {
   const sessionDropdownRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // 点击评论时滚动 PRD 到对应被评论原文位置
+  // 点击评论时滚动 PRD 到对应被评论原文位置（锚点 id="comment-{id}"），并设为激活态
   const scrollToCommentInPrd = useCallback((commentId) => {
-    const el = document.getElementById(`comment-anchor-${commentId}`);
+    setActiveCommentId(commentId);
+    const el = document.getElementById(`comment-${commentId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
+
+  // 带评论高亮锚点的 PRD Markdown（有评论且能匹配时注入 <span id="comment-{id}" class="highlight-target">）
+  const prdMarkdown = useMemo(() => {
+    if (!prdText) return '';
+    if (comments.length === 0) return prdText;
+    return buildPrdMarkdownWithHighlights(prdText, comments);
+  }, [prdText, comments]);
+
+  // 根据 activeCommentId 仅切换文档内 span 的 highlight-active 类，不重跑 buildPrdMarkdownWithHighlights
+  // prdMarkdown 变化时（文档重渲染后）需重新挂载激活态到新 DOM 节点（必须在 prdMarkdown 定义之后）
+  useEffect(() => {
+    document.querySelectorAll('.highlight-target.highlight-active').forEach((el) => el.classList.remove('highlight-active'));
+    const currEl = activeCommentId ? document.getElementById(`comment-${activeCommentId}`) : null;
+    if (currEl) currEl.classList.add('highlight-active');
+  }, [activeCommentId, prdMarkdown]);
 
   // 当前视角配置
   const currentRole = VIEW_ROLES[viewRole];
@@ -563,6 +620,7 @@ export default function AiChatDashboard() {
     }
 
     addSystemMessage('🔍 开始审查文档...');
+    setIsReviewing(true);
 
     try {
       const response = await axios.post('/api/client/review', { prd_text: prdText });
@@ -573,6 +631,8 @@ export default function AiChatDashboard() {
       }
     } catch (error) {
       addSystemMessage(`❌ 审查失败: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsReviewing(false);
     }
   };
 
@@ -825,20 +885,31 @@ export default function AiChatDashboard() {
       <div className="bg-[#09090b] border-b border-[#27272a] px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-[#f4f4f5] font-semibold">AI 协作博弈平台</h1>
-          {/* 模型状态指示器 */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#18181b] border border-[#27272a]">
-            <span className={`w-2 h-2 rounded-full ${
-              aiStatus?.isReady ? 'bg-[#10b981] animate-pulse' : 'bg-[#ef4444]'
-            }`} />
-            <span className="text-xs text-[#a1a1aa]">
-              {aiStatus?.provider === 'mock' && '🧪 Mock 模式'}
-              {aiStatus?.provider === 'ollama' && `🦙 ${aiStatus?.model || 'Ollama'}`}
-              {aiStatus?.provider === 'kimi' && `🌙 ${aiStatus?.model || 'Kimi'}`}
-              {!aiStatus?.provider && '加载中...'}
-            </span>
-            <span className={`text-xs ${aiStatus?.isReady ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-              {aiStatus?.isReady ? '就绪' : '未连接'}
-            </span>
+          {/* 模型状态指示器 + 配置入口，间距 8px */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-[#18181b] border border-[#27272a]">
+              <span className={`w-2 h-2 rounded-full ${
+                aiStatus?.isReady ? 'bg-[#10b981] animate-pulse' : 'bg-[#ef4444]'
+              }`} />
+              <span className="text-xs text-[#a1a1aa]">
+                {aiStatus?.provider === 'mock' && '🧪 Mock 模式'}
+                {aiStatus?.provider === 'ollama' && `🦙 ${aiStatus?.model || 'Ollama'}`}
+                {aiStatus?.provider === 'kimi' && `🌙 ${aiStatus?.model || 'Kimi'}`}
+                {!aiStatus?.provider && '加载中...'}
+              </span>
+              <span className={`text-xs ${aiStatus?.isReady ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+                {aiStatus?.isReady ? '就绪' : '未连接'}
+              </span>
+            </div>
+            <button
+              className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors shrink-0"
+              onClick={() => setIsConfigOpen(true)}
+              title="打开配置面板"
+            >
+              <div className="size-4 text-[#71717b]">
+                <IconMenu />
+              </div>
+            </button>
           </div>
         </div>
         
@@ -987,17 +1058,6 @@ export default function AiChatDashboard() {
                         <IconPlus />
                       </div>
                     </button>
-                    
-                    {/* 配置按钮 */}
-                    <button
-                      className="rounded-lg size-8 flex items-center justify-center cursor-pointer hover:bg-[#27272a] transition-colors shrink-0"
-                      onClick={() => setIsConfigOpen(true)}
-                      title="打开配置面板"
-                    >
-                      <div className="size-4 text-[#71717b]">
-                        <IconMenu />
-                      </div>
-                    </button>
                   </div>
                 </div>
 
@@ -1031,7 +1091,7 @@ export default function AiChatDashboard() {
                 </div>
 
                 {/* 底部输入区：Ant Design X Sender + 工具栏 */}
-                <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative shrink-0 w-full p-4">
+                <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative shrink-0 w-full px-4 pt-4 pb-3">
                   {/* 工具栏：生成prd、上传、表情 */}
                   <div className="flex items-center gap-1 mb-2">
                     <input
@@ -1086,6 +1146,35 @@ export default function AiChatDashboard() {
                   {uploadedFile && (
                     <div className="mt-2 text-xs text-[#71717b]">
                       📄 {uploadedFile.name}
+                    </div>
+                  )}
+                  {/* AI 审查文档 - 固定在聊天区域底部，与底部保持 12px 间距 */}
+                  {viewRole === 'client' && (
+                    <div className="mt-2 flex justify-start">
+                      <button
+                        onClick={triggerClientReview}
+                        disabled={isGenerating || isReviewing || !prdText || prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW}
+                        className={`min-w-[120px] h-8 px-3 py-2 text-sm ${currentRole.color.bgLight} ${currentRole.color.text} rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2`}
+                        style={{ fontFamily: '"Noto Color Emoji"' }}
+                        title={
+                          isReviewing
+                            ? '正在审查文档...'
+                            : !prdText?.trim()
+                              ? '请先在预览区输入或粘贴 PRD 内容'
+                              : prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW
+                                ? `预览区内容至少 ${MIN_PRD_LENGTH_FOR_REVIEW} 字后可进行 AI 审查`
+                                : '根据当前预览内容进行 AI 审查'
+                        }
+                      >
+                        {isReviewing ? (
+                          <>
+                            <span className="inline-block w-3.5 h-3.5 border-2 border-[#71717a] border-t-[#e4e4e7] rounded-full animate-spin shrink-0" aria-hidden />
+                            <span>审查中...</span>
+                          </>
+                        ) : (
+                          'AI 审查文档'
+                        )}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1226,9 +1315,9 @@ export default function AiChatDashboard() {
                         <p className="text-sm text-[#71717a] mt-2">正在解析文档结构并去除噪音，预计耗时 15-30 秒，请耐心等待。</p>
                       </div>
                     ) : prdText ? (
-                      /* 优先级 2：有文本内容（含整理中流式）→ Markdown 渲染，支持字一个个蹦出 */
+                      /* 优先级 2：有文本内容（含整理中流式）→ Markdown 渲染，评论对应原文高亮锚点 id="comment-{id}" */
                       <div className="p-6 text-[#d4d4d8] text-sm leading-relaxed [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:text-base [&_h3]:font-medium [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_pre]:bg-[#27272a] [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-auto">
-                        <ReactMarkdown>{prdText}</ReactMarkdown>
+                        <ReactMarkdown rehypePlugins={[rehypeRaw]}>{prdMarkdown}</ReactMarkdown>
                       </div>
                     ) : prdFileUrl && prdFileType === 'PDF' ? (
                       /* 优先级 3：默认态且为 PDF → iframe 预览 */
@@ -1289,28 +1378,36 @@ export default function AiChatDashboard() {
                         : '乙方：可查看甲方评论，进行AI回复或真人回复'}
                     </div>
 
-                    {/* AI 审查文档 - 预览区文本 ≥50 字时激活，根据当前预览内容生成评论 */}
-                    {viewRole === 'client' && (
-                      <button
-                        onClick={triggerClientReview}
-                        disabled={isGenerating || !prdText || prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW}
-                        className={`w-[120px] h-8 px-3 py-2 text-sm ${currentRole.color.bgLight} ${currentRole.color.text} rounded-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3`}
-                        style={{ fontFamily: '"Noto Color Emoji"' }}
-                        title={
-                          !prdText?.trim()
-                            ? '请先在预览区输入或粘贴 PRD 内容'
-                            : prdText.trim().length < MIN_PRD_LENGTH_FOR_REVIEW
-                              ? `预览区内容至少 ${MIN_PRD_LENGTH_FOR_REVIEW} 字后可进行 AI 审查`
-                              : '根据当前预览内容进行 AI 审查'
-                        }
-                      >
-                        AI 审查文档
-                      </button>
-                    )}
-
                     {/* 评论列表 */}
                     <div className="bg-[#09090b] border-[#27272a] border-solid border-t relative w-full p-4 flex-1 overflow-y-auto min-h-0">
-                      {comments.length === 0 ? (
+                      {isReviewing && comments.length === 0 ? (
+                        /* 审查中：骨架屏 */
+                        <div className="py-2 space-y-3">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div key={`skeleton-${i}`} className="px-4 py-3 rounded-lg">
+                              <div className="flex gap-3">
+                                <div className="w-1 rounded-full bg-[#3f3f46] shrink-0 animate-pulse" />
+                                <div className="flex-1 min-w-0 space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="h-4 w-16 rounded bg-[#27272a] animate-pulse" />
+                                    <span className="h-3 w-14 rounded bg-[#27272a]/80 animate-pulse" />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-full bg-[#27272a] animate-pulse shrink-0" />
+                                    <span className="h-3 w-12 rounded bg-[#27272a]/80 animate-pulse" />
+                                    <span className="h-3 w-20 rounded bg-[#27272a]/60 animate-pulse" />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <div className="h-3 w-full max-w-[95%] rounded bg-[#27272a] animate-pulse" />
+                                    <div className="h-3 w-full max-w-[80%] rounded bg-[#27272a] animate-pulse" />
+                                    <div className="h-3 w-3/4 rounded bg-[#27272a]/80 animate-pulse" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : comments.length === 0 ? (
                         <div className="text-[#52525c] text-center py-12 px-4">
                           <p className="text-sm">暂无评论</p>
                           <p className="text-xs mt-2">
@@ -1323,9 +1420,22 @@ export default function AiChatDashboard() {
                         <div className="py-2">
                           {comments.map((comment) => {
                             const riskColor = getRiskLevelColor(comment.risk_level);
-                            const hasQuoted = !!(comment.quoted_text || '').trim();
+                            const quoted = (comment.quote ?? comment.quoted_text ?? '').trim();
+                            const hasQuoted = !!quoted;
                             return (
-                              <div key={comment.id} className="px-4 py-3 hover:bg-[#27272a]/30 transition-colors">
+                              <div
+                                key={comment.id}
+                                className={`px-4 py-3 transition-all duration-200 rounded ${hasQuoted ? 'cursor-pointer hover:bg-[#27272a]/30' : ''} ${comment.id === activeCommentId ? 'border-l-4 border-amber-500 bg-amber-500/10 shadow-md' : ''}`}
+                                onClick={() => hasQuoted && scrollToCommentInPrd(comment.id)}
+                                role={hasQuoted ? 'button' : undefined}
+                                tabIndex={hasQuoted ? 0 : undefined}
+                                onKeyDown={(e) => {
+                                  if (hasQuoted && (e.key === 'Enter' || e.key === ' ')) {
+                                    e.preventDefault();
+                                    scrollToCommentInPrd(comment.id);
+                                  }
+                                }}
+                              >
                                 <div className="flex gap-3">
                                   <div className={`w-1 rounded-full ${riskColor.bg} shrink-0`} />
                                   
@@ -1362,9 +1472,9 @@ export default function AiChatDashboard() {
                                       {comment.content}
                                     </p>
 
-                                    {/* 回复区域 */}
+                                    {/* 回复区域（阻止点击冒泡，避免触发整卡滚动） */}
                                     {comment.reply_content ? (
-                                      <div className="mt-3 pl-3 border-l-2 border-[#3f3f46]">
+                                      <div className="mt-3 pl-3 border-l-2 border-[#3f3f46]" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center gap-2 mb-1">
                                           <div className="w-5 h-5 rounded-full bg-[#3f3f46] flex items-center justify-center text-[#f4f4f5] text-[10px] font-medium">
                                             乙
@@ -1378,8 +1488,8 @@ export default function AiChatDashboard() {
                                         </p>
                                       </div>
                                     ) : viewRole === 'vendor' ? (
-                                      /* 乙方视角：可以回复 */
-                                      <div className="mt-3 space-y-2">
+                                      /* 乙方视角：可以回复（阻止点击冒泡） */
+                                      <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex gap-2">
                                           <input
                                             type="text"
@@ -1444,16 +1554,16 @@ export default function AiChatDashboard() {
               )}
       </div>
       
-      {/* 配置弹窗 */}
-      <Modal 
-        isOpen={isConfigOpen} 
+      {/* 配置抽屉 - 左侧滑入，宽度 500px */}
+      <Drawer
+        isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
         title="AI 能力配置"
       >
         <Suspense fallback={<div className="flex items-center justify-center p-8 text-[#71717a]">加载配置中...</div>}>
           <AppConfig isEmbedded={true} />
         </Suspense>
-      </Modal>
+      </Drawer>
     </div>
   );
 }

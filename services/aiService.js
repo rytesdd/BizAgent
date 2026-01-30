@@ -301,7 +301,8 @@ function setRuntimeConfig(config) {
     if (config.kimi.model) {
       runtimeConfig.kimi.model = config.kimi.model;
     }
-    if (config.kimi.apiKey) {
+    // 仅接受真实密钥，脱敏占位符 "********" 不覆盖（继续使用 .env）
+    if (config.kimi.apiKey && config.kimi.apiKey !== "********") {
       runtimeConfig.kimi.apiKey = config.kimi.apiKey;
     }
   }
@@ -345,9 +346,7 @@ function initRuntimeConfig(savedConfig) {
     if (savedConfig.kimi.model) {
       runtimeConfig.kimi.model = savedConfig.kimi.model;
     }
-    if (savedConfig.kimi.apiKey) {
-      runtimeConfig.kimi.apiKey = savedConfig.kimi.apiKey;
-    }
+    // Kimi API Key 仅从 .env (KIMI_API_KEY) 读取，不从 db 恢复，避免泄露
   }
   
   logStep("从持久化存储恢复配置", { provider: runtimeConfig.provider, model: getModelName(runtimeConfig.provider) });

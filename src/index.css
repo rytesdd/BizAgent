@@ -72,6 +72,15 @@ html, body {
   background-color: rgba(64, 64, 64, 1) !important;
 }
 
+/* 隐藏滚动条但保留滚动 */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* 竖排文字 */
 .writing-mode-vertical {
   writing-mode: vertical-rl;
@@ -98,4 +107,21 @@ li,
 td,
 th {
   font-size: 12px !important;
+}
+
+/* 评论对应原文高亮：点击右侧评论卡片后文档内定位并高亮（默认态） */
+.highlight-target {
+  border-bottom: 2px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 2px;
+  padding: 0 2px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 文档内选中态：与右侧评论卡片联动 */
+.highlight-target.highlight-active {
+  background: rgba(245, 158, 11, 0.4);
+  border-left: 4px solid #f59e0b;
+  border-bottom: 2px solid #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3);
 }

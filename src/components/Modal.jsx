@@ -39,10 +39,10 @@ export default function Modal({ isOpen, onClose, title, children }) {
       />
 
       {/* 弹窗内容 */}
-      <div className="relative w-[90vw] max-w-[1200px] h-[85vh] bg-[#09090b] border border-[#27272a] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-fit max-w-[90vw] h-[85vh] bg-[#09090b] border border-[#27272a] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* 头部 */}
         {title && (
-          <div className="flex items-center justify-between h-[56px] px-6 border-b border-[#27272a] bg-[#09090b]">
+          <div className="flex items-center justify-between h-[56px] px-8 border-b border-[#27272a] bg-[#09090b]">
             <h2 className="text-lg font-semibold text-[#f4f4f5]">{title}</h2>
             <button
               onClick={onClose}
@@ -70,7 +70,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
 
         {/* 内容区域 */}
         <div
-          className={`overflow-auto ${title ? 'h-[calc(100%-56px)]' : 'h-full'}`}
+          className={`overflow-auto px-8 ${title ? 'h-[calc(100%-56px)]' : 'h-full'}`}
           style={{
             // 暗色滚动条样式
             scrollbarWidth: 'thin',

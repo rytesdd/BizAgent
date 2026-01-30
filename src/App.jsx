@@ -431,11 +431,10 @@ function App({ isEmbedded = false }) {
 
       {/* Main Content - Configuration Panel */}
       <div className={`mx-auto px-6 py-6 ${isEmbedded ? 'max-w-lg' : 'max-w-2xl'}`}>
-        <div className={`rounded-xl border p-6 shadow-sm ${
-          isEmbedded 
-            ? 'border-[#27272a] bg-[#18181b]' 
-            : 'border-slate-200 bg-white'
-        }`}>
+        <div className={isEmbedded
+          ? 'p-6'
+          : 'rounded-xl border border-slate-200 bg-white p-6 shadow-sm'
+        }>
               {/* Tab 切换栏 */}
               <div className={`mb-6 flex rounded-lg border overflow-hidden ${
                 isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
@@ -561,7 +560,10 @@ function App({ isEmbedded = false }) {
 
                     {/* Ollama 配置 */}
                     {modelConfig.provider === 'ollama' && (
-                      <div className="space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]">
+                      <div className={isEmbedded
+                        ? 'space-y-3 pt-3 mt-3 border-t border-[#27272a]'
+                        : 'space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
+                      }>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-[#71717a]">Ollama 本地模型</span>
                           <button
@@ -631,7 +633,10 @@ function App({ isEmbedded = false }) {
 
                     {/* Kimi 配置 */}
                     {modelConfig.provider === 'kimi' && (
-                      <div className="space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]">
+                      <div className={isEmbedded
+                        ? 'space-y-3 pt-3 mt-3 border-t border-[#27272a]'
+                        : 'space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
+                      }>
                         <span className="text-xs text-[#71717a]">Kimi (Moonshot) API</span>
                         
                         {/* API Key */}
@@ -680,7 +685,10 @@ function App({ isEmbedded = false }) {
 
                     {/* Mock 模式提示 */}
                     {modelConfig.provider === 'mock' && (
-                      <div className="p-3 rounded-lg bg-[#09090b] border border-[#27272a]">
+                      <div className={isEmbedded
+                        ? 'pt-3 mt-3 border-t border-[#27272a]'
+                        : 'p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
+                      }>
                         <p className="text-xs text-[#71717a]">
                           🧪 Mock 模式：返回固定测试回复，适合 UI 开发调试。
                         </p>
@@ -766,43 +774,47 @@ function App({ isEmbedded = false }) {
                         : '🛡️ 乙方 AI：项目经理视角，更温和、更详尽'}
                     </div>
 
-                    {/* 人设（甲/乙方 AI 行为风格） */}
+                    {/* 人设（甲/乙方 AI 行为风格）- 仅显示当前选中角色的人设 */}
                     <div className="space-y-4">
                       <ConfigSectionTitle icon="👤" title="人设" />
-                      <div>
-                        <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                          甲方人设
-                        </label>
-                        <input
-                          type="text"
-                          value={clientPersona}
-                          onChange={(e) => setClientPersona(e.target.value)}
-                          disabled={isLocked}
-                          placeholder="如：挑剔技术总监"
-                          className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            isEmbedded
-                              ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                              : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                          乙方人设
-                        </label>
-                        <input
-                          type="text"
-                          value={vendorPersona}
-                          onChange={(e) => setVendorPersona(e.target.value)}
-                          disabled={isLocked}
-                          placeholder="如：卑微项目经理"
-                          className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                            isEmbedded
-                              ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                              : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
-                          }`}
-                        />
-                      </div>
+                      {activeConfigRole === 'client' && (
+                        <div>
+                          <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
+                            甲方人设
+                          </label>
+                          <input
+                            type="text"
+                            value={clientPersona}
+                            onChange={(e) => setClientPersona(e.target.value)}
+                            disabled={isLocked}
+                            placeholder="如：挑剔技术总监"
+                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isEmbedded
+                                ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
+                                : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
+                            }`}
+                          />
+                        </div>
+                      )}
+                      {activeConfigRole === 'vendor' && (
+                        <div>
+                          <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
+                            乙方人设
+                          </label>
+                          <input
+                            type="text"
+                            value={vendorPersona}
+                            onChange={(e) => setVendorPersona(e.target.value)}
+                            disabled={isLocked}
+                            placeholder="如：卑微项目经理"
+                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isEmbedded
+                                ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
+                                : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
+                            }`}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* 认知控制 */}

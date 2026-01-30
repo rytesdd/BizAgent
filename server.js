@@ -383,13 +383,15 @@ app.get("/api/ai/config", (req, res) => {
   try {
     const config = aiService.getRuntimeConfig();
     const status = aiService.getStatus();
-    res.json({ 
-      success: true, 
-      data: {
-        ...config,
-        availableModels: status.availableModels,
-      },
-    });
+    // 返回给前端时脱敏：Kimi API Key 不传明文，仅表示是否已配置
+    const data = {
+      ...config,
+      availableModels: status.availableModels,
+    };
+    if (data.kimi?.apiKey) {
+      data.kimi = { ...data.kimi, apiKey: "********" };
+    }
+    res.json({ success: true, data });
   } catch (error) {
     logStep("获取模型配置失败", { error: String(error) });
     res.status(500).json({ success: false, error: String(error) });
@@ -404,14 +406,14 @@ app.post("/api/ai/config", (req, res) => {
     // 1. 更新运行时配置
     const newConfig = aiService.setRuntimeConfig({ provider, ollama, kimi });
     
-    // 2. 持久化到 db.json
+    // 2. 持久化到 db.json（Kimi API Key 不写入，仅通过 .env 配置）
     const db = readDb();
     db.model_config = {
       provider: newConfig.provider,
       ollama: newConfig.ollama,
       kimi: {
         model: newConfig.kimi?.model,
-        apiKey: newConfig.kimi?.apiKey || "", // 注意：API Key 也会保存，确保文件安全
+        apiKey: "", // 不持久化密钥，使用 .env 中的 KIMI_API_KEY
       },
     };
     writeDb(db);
@@ -599,8 +601,8 @@ app.post("/api/client/review", upload.single("prd_file"), async (req, res) => {
       prdFilePath = path.relative(__dirname, req.file.path);
       fileName = req.file.originalname;
       
-      // 使用文件解析服务（支持 PDF、TXT、MD）
-      const parseResult = await fileParser.parseFile(req.file.path);
+      // 使用文件解析服务（支持 PDF、TXT、MD）；传入原始文件名以便识别类型（multer 路径无扩展名）
+      const parseResult = await fileParser.parseFile(req.file.path, req.file.originalname);
       if (!parseResult.success) {
         return res.status(400).json({ success: false, error: parseResult.error });
       }
@@ -1527,10 +1529,15 @@ app.use((err, req, res, next) => {
 
 ensureDbFile();
 
-// 从 db.json 恢复模型配置（持久化）
+// 从 db.json 恢复模型配置（持久化），并清除可能存在的 Kimi API Key 明文
 try {
   const db = readDb();
   if (db.model_config) {
+    if (db.model_config.kimi?.apiKey) {
+      db.model_config.kimi.apiKey = "";
+      writeDb(db);
+      logStep("已从 db.json 中移除 Kimi API Key（请使用 .env 的 KIMI_API_KEY）");
+    }
     aiService.initRuntimeConfig(db.model_config);
     logStep("已从 db.json 恢复模型配置", { provider: db.model_config.provider });
   }
