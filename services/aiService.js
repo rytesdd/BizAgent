@@ -837,6 +837,31 @@ async function reformatDocument(rawText) {
 }
 
 /**
+ * 流式重新整理文档（逐 chunk 产出，供 SSE 使用）
+ * @param {string} rawText - 从 PDF 等提取的原始文本
+ * @yields {string} 每个 delta 文本片段
+ */
+async function* reformatDocumentStream(rawText) {
+  if (!rawText || typeof rawText !== "string") {
+    throw new Error("没有可整理的文档内容");
+  }
+  const text = rawText.length > REFORMAT_MAX_CHARS
+    ? rawText.slice(0, REFORMAT_MAX_CHARS) + "\n\n[后文过长已省略，仅整理前 " + REFORMAT_MAX_CHARS + " 字]"
+    : rawText;
+  logStep("开始流式重新整理文档", { inputLength: rawText.length, sentLength: text.length });
+
+  const systemPrompt = "你是一个文档整理助手。把从 PDF 等提取的杂乱文本重新排版成结构清晰、分段合理、易读的文档。只做格式与结构优化（分段、小标题、列表等），不改变原意，不增删关键信息。用中文输出，使用 Markdown 格式。";
+  const userPrompt = `请对以下内容重新排版（分段、加小标题、列表等，意思不变）：\n\n${text}`;
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  yield* callAIStream(messages, { temperature: 0.4, max_tokens: 8192 });
+  logStep("流式重新整理完成");
+}
+
+/**
  * 检测消息是否为 PRD 生成指令
  * @param {string} content - 用户消息内容
  * @returns {Object|null} 如果是生成指令返回 { isCommand: true, description }，否则返回 null
@@ -1081,7 +1106,8 @@ module.exports = {
   generatePRD,         // 生成 PRD 文档
   generatePRDStream,   // 流式生成 PRD 文档
   detectPRDCommand,    // 检测 PRD 生成指令
-  reformatDocument,    // 用 AI 对文档重新排版
+  reformatDocument,       // 用 AI 对文档重新排版（一次性）
+  reformatDocumentStream, // 流式重新排版（供 SSE）
 
   // 配置管理
   getProvider,
