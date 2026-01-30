@@ -1218,8 +1218,16 @@ export default function AiChatDashboard() {
                     )}
                   </div>
                   <div className="flex-1 overflow-auto min-h-0">
-                    {/* 优先级 1：正在整理且尚未产生内容 → 仅显示 AI 工作状态，严禁旧 PDF/空白 */}
-                    {isReformatting && !prdText ? (
+                    {/* PRD 生成中（与智能重排区分） */}
+                    {isPrdGenerating ? (
+                      <div className="flex flex-col items-center justify-center h-full text-[#52525c] py-16">
+                        <div className="text-4xl mb-4 animate-pulse">📝</div>
+                        <p className="text-base mb-2 text-[#10b981]">正在生成 PRD 文档...</p>
+                        <p className="text-xs">AI 正在根据您的需求描述生成完整的 PRD 文档</p>
+                        <p className="text-xs mt-2 text-[#71717a]">这可能需要一些时间，请稍候</p>
+                      </div>
+                    ) : isReformatting && !prdText ? (
+                      /* 优先级 1：正在整理且尚未产生内容 → 仅显示 AI 工作状态，严禁旧 PDF/空白 */
                       <div className="flex flex-col items-center justify-center h-full text-gray-500 py-16">
                         <div className="w-10 h-10 border-2 border-[#3f3f46] border-t-[#3b82f6] rounded-full animate-spin mb-4" aria-hidden />
                         <p className="text-lg font-medium text-[#e4e4e7]">正在进行 AI 智能重排...</p>
