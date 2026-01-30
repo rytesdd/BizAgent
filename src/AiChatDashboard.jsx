@@ -996,7 +996,6 @@ export default function AiChatDashboard() {
                 >
                   {bubbleItems.length === 0 && !isGenerating ? (
                     <div className="text-center text-[#52525c] py-8">
-                      <div className="text-4xl mb-4">{currentRole.emoji}</div>
                       <p className="mb-2">{currentRole.name}聊天</p>
                       <p className="text-xs">输入 /help 查看可用命令</p>
                     </div>
