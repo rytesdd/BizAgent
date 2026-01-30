@@ -1159,11 +1159,6 @@ export default function AiChatDashboard() {
                                   } catch (_) {}
                                 }
                               }
-                              if (accumulated && !accumulated.match(/done/)) {
-                                setPrdText(accumulated);
-                                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'manual' });
-                                addSystemMessage('✅ 文档已用 AI 重新整理');
-                              }
                             } catch (e) {
                               addSystemMessage(`重新整理失败: ${e.message || e}`);
                             } finally {
