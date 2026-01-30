@@ -45,7 +45,7 @@ html, body {
 }
 /* 消息气泡容器背景 */
 .chat-panel-dark .ant-bubble-content {
-  background: #999999;
+  background: rgba(40, 58, 195, 1);
 }
 
 /* 竖排文字 */
