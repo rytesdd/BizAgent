@@ -208,13 +208,14 @@ async function parseBuffer(buffer, originalName) {
           };
         }
         const data = await pdfParse(buffer);
+        const content = cleanPdfText(data.text);
         return {
           success: true,
-          content: data.text,
+          content,
           type: "PDF",
           metadata: {
             pages: data.numpages,
-            characters: data.text.length,
+            characters: content.length,
           },
         };
 
