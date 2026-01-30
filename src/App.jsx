@@ -86,6 +86,15 @@ function App({ isEmbedded = false }) {
     setTimeout(() => setToast(null), 3000)
   }
 
+  // 请求失败时给出可操作提示（无法连接后端时）
+  const getSaveErrorMessage = (error, fallback = '保存失败') => {
+    if (error.response?.data?.error) return error.response.data.error
+    if (!error.response && (error.code === 'ERR_NETWORK' || error.message?.includes('Network'))) {
+      return '无法连接服务器，请先运行 npm run dev:all 或同时启动后端与前端'
+    }
+    return fallback
+  }
+
   // AI 配置更新处理器（支持甲乙方）
   const handleAiConfigChange = (path, value) => {
     const setConfig = activeConfigRole === 'client' ? setClientAiConfig : setVendorAiConfig
@@ -195,7 +204,7 @@ function App({ isEmbedded = false }) {
         showToast(response.data.error || '保存失败', 'error')
       }
     } catch (error) {
-      showToast(error.response?.data?.error || '保存失败', 'error')
+      showToast(getSaveErrorMessage(error, '保存失败'), 'error')
     } finally {
       setIsSavingModel(false)
     }
@@ -308,7 +317,7 @@ function App({ isEmbedded = false }) {
         showToast(personaResponse.data.error || '保存失败', 'error')
       }
     } catch (error) {
-      showToast(error.response?.data?.error || '网络错误', 'error')
+      showToast(getSaveErrorMessage(error, '保存失败'), 'error')
     } finally {
       setIsSavingPersona(false)
     }

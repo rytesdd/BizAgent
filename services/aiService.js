@@ -949,10 +949,19 @@ function parseJsonArray(rawText) {
  */
 function getStatus() {
   const provider = getProvider();
+  let isReady = false;
+  let statusError = null;
+  try {
+    isReady = provider === AI_PROVIDERS.MOCK || !!createClient(provider);
+  } catch (err) {
+    logStep("getStatus: createClient 失败", { error: err.message });
+    statusError = err.message || String(err);
+  }
   return {
     provider,
     model: getModelName(provider),
-    isReady: provider === AI_PROVIDERS.MOCK || !!createClient(provider),
+    isReady,
+    statusError,
     config: getRuntimeConfig(),
     availableModels: {
       ollama: AVAILABLE_OLLAMA_MODELS,

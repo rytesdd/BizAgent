@@ -13,7 +13,7 @@ const aiService = require("./services/aiService");
 const fileParser = require("./services/fileParser");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const DATA_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DATA_DIR, "db.json");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
@@ -160,6 +160,23 @@ function ensureDbFile() {
       delete parsed.chat_messages;
       needsUpdate = true;
     }
+    // 会话管理字段（避免旧 db 缺键导致路由 500）
+    if (!Array.isArray(parsed.client_chat_sessions)) {
+      parsed.client_chat_sessions = [];
+      needsUpdate = true;
+    }
+    if (!Array.isArray(parsed.vendor_chat_sessions)) {
+      parsed.vendor_chat_sessions = [];
+      needsUpdate = true;
+    }
+    if (parsed.current_client_session_id === undefined) {
+      parsed.current_client_session_id = null;
+      needsUpdate = true;
+    }
+    if (parsed.current_vendor_session_id === undefined) {
+      parsed.current_vendor_session_id = null;
+      needsUpdate = true;
+    }
     if (needsUpdate) {
       fs.writeFileSync(DB_PATH, JSON.stringify(parsed, null, 2), "utf8");
     }
@@ -174,7 +191,14 @@ function ensureDbFile() {
 function readDb() {
   ensureDbFile();
   const raw = fs.readFileSync(DB_PATH, "utf8");
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    logStep("readDb 解析失败，触发修复", { error: String(e) });
+    ensureDbFile(); // 会走 catch 写入 DEFAULT_DB
+    const retry = fs.readFileSync(DB_PATH, "utf8");
+    return JSON.parse(retry);
+  }
 }
 
 function writeDb(db) {
@@ -1015,17 +1039,21 @@ app.post("/api/chat/send", async (req, res) => {
             res.write("data: " + JSON.stringify({ type: "delta", content: chunk }) + "\n\n");
           }
 
-          // 流结束后持久化（新 PRD 替换旧文档，评论仅跟随当前 PRD，故清空旧评论）
-          const prdDb = readDb();
-          prdDb.project_context = {
-            ...prdDb.project_context,
+          // ==================== 修复开始 ====================
+          // 原有逻辑是分两次 readDb/writeDb，现在合并为一次原子操作
+
+          const db = readDb(); // 读取最新数据库状态
+
+          // 1. 更新 PRD 上下文并强制清空评论
+          db.project_context = {
+            ...db.project_context,
             prd_text: fullContent,
             generated_at: new Date().toISOString(),
             generated_from: prdCommand.description.slice(0, 100),
           };
-          prdDb.comments = [];
-          writeDb(prdDb);
+          db.comments = []; // 核心修复：确保在此次最终写入中评论被清空
 
+          // 2. 添加助手消息
           const assistantMessage = {
             id: generateId("chat"),
             role: "assistant",
@@ -1033,13 +1061,15 @@ app.post("/api/chat/send", async (req, res) => {
             created_at: new Date().toISOString(),
           };
 
-          const updatedDb = readDb();
-          const updatedSession = getOrCreateCurrentSession(updatedDb, chatRole);
-          updatedSession.messages.push(assistantMessage);
-          updatedSession.updated_at = assistantMessage.created_at;
-          writeDb(updatedDb);
+          const session = getOrCreateCurrentSession(db, chatRole);
+          session.messages.push(assistantMessage);
+          session.updated_at = assistantMessage.created_at;
+
+          // 3. 统一写入磁盘
+          writeDb(db);
 
           logStep("PRD 流式生成完成并保存", { sessionId, prdLength: fullContent.length });
+          // ==================== 修复结束 ====================
 
           res.write("data: " + JSON.stringify({ type: "done", prd_content: fullContent, session_id: sessionId, prd_description: prdCommand.description }) + "\n\n");
         } catch (streamErr) {
