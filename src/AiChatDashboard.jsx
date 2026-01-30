@@ -321,6 +321,100 @@ export default function AiChatDashboard() {
     return prdKeywords.some(keyword => text.includes(keyword));
   };
 
+  // 执行 PRD 生成（供输入框发送与「生成prd」按钮共用）
+  const runPrdGeneration = async (content) => {
+    setComments([]);
+    addSystemMessage('📝 正在生成 PRD 文档…');
+    eventBus.emit(EVENTS.PRD_GENERATION_STARTED, {});
+
+    const res = await fetch('/api/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, view_role: viewRole }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || res.statusText);
+    }
+
+    const contentType = res.headers.get('Content-Type') || '';
+    if (contentType.includes('text/event-stream')) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+      let lastEmit = 0;
+      let receivedDone = false;
+      const throttleMs = 80;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const payload = JSON.parse(line.slice(6));
+            if (payload.type === 'delta' && payload.content) {
+              accumulated += payload.content;
+              const now = Date.now();
+              if (now - lastEmit >= throttleMs) {
+                lastEmit = now;
+                setPrdText(accumulated);
+                eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'chat' });
+              }
+            } else if (payload.type === 'done') {
+              receivedDone = true;
+              const finalContent = payload.prd_content ?? accumulated;
+              setPrdText(finalContent);
+              setComments([]);
+              eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: finalContent, source: 'chat', description: payload.prd_description });
+              eventBus.emit(EVENTS.PRD_GENERATION_COMPLETED, { prdContent: finalContent, description: payload.prd_description });
+              await fetchData(true);
+            } else if (payload.type === 'error') {
+              addSystemMessage(`生成失败: ${payload.error || '未知错误'}`);
+            }
+          } catch (_) {}
+        }
+      }
+      if (!receivedDone && accumulated) {
+        setPrdText(accumulated);
+        eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'chat' });
+      }
+    } else {
+      const data = await res.json();
+      if (data.success && data.data?.type === 'prd_generation') {
+        const { prd_content, prd_description } = data.data;
+        setPrdText(prd_content);
+        setComments([]);
+        eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: prd_content, source: 'chat', description: prd_description });
+        eventBus.emit(EVENTS.PRD_GENERATION_COMPLETED, { prdContent: prd_content, description: prd_description });
+        await fetchData(true);
+      }
+    }
+  };
+
+  // 点击「生成prd」按钮：直接调用模型生成 PRD
+  const handleGeneratePrd = async () => {
+    if (viewRole !== 'vendor' || isGenerating) return;
+    setIsGenerating(true);
+    eventBus.emit(EVENTS.GENERATION_STARTED, {});
+    try {
+      await runPrdGeneration('生成prd');
+    } catch (error) {
+      console.error('生成 PRD 失败:', error);
+      addSystemMessage(`生成失败: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsGenerating(false);
+      eventBus.emit(EVENTS.GENERATION_COMPLETED, {});
+    }
+  };
+
   const handleSendMessage = async () => {
     const content = inputValue.trim();
     if (!content || isGenerating) return;
@@ -336,81 +430,7 @@ export default function AiChatDashboard() {
       } else {
         const isPrdCommand = viewRole === 'vendor' && isPrdGenerationCommand(content);
         if (isPrdCommand) {
-          setComments([]);
-          addSystemMessage('📝 正在生成 PRD 文档…');
-          eventBus.emit(EVENTS.PRD_GENERATION_STARTED, {});
-
-          // 流式 PRD：用 fetch 消费 SSE，边收边更新预览
-          const res = await fetch('/api/chat/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content, view_role: viewRole }),
-          });
-
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || res.statusText);
-          }
-
-          const contentType = res.headers.get('Content-Type') || '';
-          if (contentType.includes('text/event-stream')) {
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let accumulated = '';
-            let lastEmit = 0;
-            let receivedDone = false;
-            const throttleMs = 80;
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const parts = buffer.split('\n\n');
-              buffer = parts.pop() || '';
-
-              for (const part of parts) {
-                const line = part.trim();
-                if (!line.startsWith('data: ')) continue;
-                try {
-                  const payload = JSON.parse(line.slice(6));
-                  if (payload.type === 'delta' && payload.content) {
-                    accumulated += payload.content;
-                    const now = Date.now();
-                    if (now - lastEmit >= throttleMs) {
-                      lastEmit = now;
-                      setPrdText(accumulated);
-                      eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'chat' });
-                    }
-                  } else if (payload.type === 'done') {
-                    receivedDone = true;
-                    const finalContent = payload.prd_content ?? accumulated;
-                    setPrdText(finalContent);
-                    setComments([]);
-                    eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: finalContent, source: 'chat', description: payload.prd_description });
-                    eventBus.emit(EVENTS.PRD_GENERATION_COMPLETED, { prdContent: finalContent, description: payload.prd_description });
-                    await fetchData(true);
-                  } else if (payload.type === 'error') {
-                    addSystemMessage(`生成失败: ${payload.error || '未知错误'}`);
-                  }
-                } catch (_) {}
-              }
-            }
-            if (!receivedDone && accumulated) {
-              setPrdText(accumulated);
-              eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: accumulated, source: 'chat' });
-            }
-          } else {
-            const data = await res.json();
-            if (data.success && data.data?.type === 'prd_generation') {
-              const { prd_content, prd_description } = data.data;
-              setPrdText(prd_content);
-              setComments([]);
-              eventBus.emit(EVENTS.PRD_UPDATED, { prdContent: prd_content, source: 'chat', description: prd_description });
-              eventBus.emit(EVENTS.PRD_GENERATION_COMPLETED, { prdContent: prd_content, description: prd_description });
-              await fetchData(true);
-            }
-          }
+          await runPrdGeneration(content);
         } else {
           // 普通聊天消息
           const response = await axios.post('/api/chat/send', {
