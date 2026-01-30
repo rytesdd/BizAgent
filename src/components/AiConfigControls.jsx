@@ -277,3 +277,53 @@ export const AI_CONFIG_TOOLTIPS = {
 
 全局知识库：允许调用行业标准、历史案例或竞品数据进行对比攻击。`,
 };
+
+/**
+ * 紧急断开按钮：立即切换为 Mock 并刷新页面，用于打断 API 死循环
+ */
+export function EmergencyDisconnectButton() {
+  const [loading, setLoading] = useState(false);
+
+  const handleEmergencyDisconnect = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/ai/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'mock' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        alert('已断开连接，已切换回免费 Mock 模式');
+        window.location.reload();
+      } else {
+        alert(data.error || '切换失败，请稍后重试');
+        setLoading(false);
+      }
+    } catch (err) {
+      alert('请求失败：' + (err.message || '网络错误'));
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleEmergencyDisconnect}
+      disabled={loading}
+      className="w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium
+        bg-red-600 hover:bg-red-700 active:bg-red-800 text-white border border-red-500/50
+        disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+    >
+      {loading ? (
+        <>
+          <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          切换中...
+        </>
+      ) : (
+        <>🔴 紧急断开 Kimi (切换 Mock)</>
+      )}
+    </button>
+  );
+}
