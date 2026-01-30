@@ -1192,11 +1192,11 @@ export default function AiChatDashboard() {
                         <p className="text-xs">AI 正在根据您的需求描述生成完整的 PRD 文档</p>
                         <p className="text-xs mt-2 text-[#71717a]">这可能需要一些时间，请稍候</p>
                       </div>
-                    ) : isReformatting ? (
+                    ) : isReformatting && !prdText ? (
                       <div className="text-[#52525c] text-center py-16">
                         <div className="text-4xl mb-4 animate-pulse">✨</div>
                         <p className="text-base mb-2 text-[#10b981]">正在用 AI 重新整理文档...</p>
-                        <p className="text-xs text-[#71717a]">请稍候</p>
+                        <p className="text-xs text-[#71717a]">请稍候，内容将逐段显示</p>
                       </div>
                     ) : prdFileType === 'PDF' && prdFileUrl ? (
                       <div className="w-full h-full min-h-[400px] rounded overflow-hidden bg-[#18181b]">
