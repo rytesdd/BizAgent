@@ -1016,7 +1016,7 @@ export default function AiChatDashboard() {
                     
                     {/* 工具栏 */}
                     <div className="flex items-center justify-between px-2 pb-2">
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 items-center">
                         <input
                           type="file"
                           ref={fileInputRef}
@@ -1024,6 +1024,17 @@ export default function AiChatDashboard() {
                           accept=".txt,.md,.pdf"
                           className="hidden"
                         />
+                        {viewRole === 'vendor' && (
+                          <button
+                            type="button"
+                            onClick={handleGeneratePrd}
+                            disabled={isGenerating}
+                            className="rounded-lg px-3 py-1.5 text-sm font-medium bg-[#10b981]/20 text-[#10b981] hover:bg-[#10b981]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="点击调用模型生成 PRD 文档"
+                          >
+                            生成prd
+                          </button>
+                        )}
                         <button
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isUploading}
