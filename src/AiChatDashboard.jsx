@@ -20,6 +20,9 @@ const AUTHOR_TYPES = {
 // 轮询间隔（毫秒）
 const POLL_INTERVAL = 3000;
 
+// 预览区文本达到此字数后，「AI 审查文档」按钮才可点击
+const MIN_PRD_LENGTH_FOR_REVIEW = 50;
+
 // 统一配色（灰色系）
 const UNIFIED_COLORS = {
   bg: 'bg-[#3f3f46]',
@@ -526,8 +529,13 @@ export default function AiChatDashboard() {
   // ============================================
 
   const triggerClientReview = async () => {
-    if (!prdText) {
-      addSystemMessage('请先上传或输入 PRD 文档');
+    const trimmed = (prdText || '').trim();
+    if (!trimmed) {
+      addSystemMessage('请先在预览区输入或粘贴 PRD 内容');
+      return;
+    }
+    if (trimmed.length < MIN_PRD_LENGTH_FOR_REVIEW) {
+      addSystemMessage(`预览区内容至少 ${MIN_PRD_LENGTH_FOR_REVIEW} 字后可进行 AI 审查`);
       return;
     }
 
