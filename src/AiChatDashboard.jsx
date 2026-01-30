@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, Fragment, lazy, Suspense } from 'react';
 import axios from 'axios';
+import ReactMarkdown from 'react-markdown';
 import { IconAI, IconMenu, IconSend, IconAttachment, IconEmoji, IconPlus, IconTrash, IconChevronDown, IconCheck } from './svg-icons';
 import Modal from './components/Modal';
 import { eventBus, EVENTS } from './utils/eventBus';
