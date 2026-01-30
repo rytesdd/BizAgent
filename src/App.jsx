@@ -298,6 +298,31 @@ function App({ isEmbedded = false }) {
 
     setIsSavingPersona(true)
     try {
+      let finalPrdText = prdText
+
+      // 若有已选文档（含 PDF），先上传并解析，再保存配置
+      if (prdFile) {
+        const formData = new FormData()
+        formData.append('file', prdFile)
+        const uploadRes = await axios.post('/api/file/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        if (uploadRes.data.success) {
+          finalPrdText = uploadRes.data.data.content ?? ''
+          setPrdText(finalPrdText)
+          setPrdFile(null)
+          eventBus.emit(EVENTS.PRD_UPDATED, {
+            prdContent: finalPrdText,
+            source: 'manual',
+            description: uploadRes.data.data.file_name,
+          })
+        } else {
+          showToast(uploadRes.data.error || '文档解析失败', 'error')
+          setIsSavingPersona(false)
+          return
+        }
+      }
+
       // 同时保存人设配置和 AI 配置
       const [personaResponse, aiConfigSaved] = await Promise.all([
         axios.post('/api/config/persona', {
@@ -309,12 +334,12 @@ function App({ isEmbedded = false }) {
 
       if (personaResponse.data.success) {
         showToast(aiConfigSaved ? '全部配置已保存' : '人设配置已保存')
-        
+
         // 通知聊天界面配置已更新
         eventBus.emit(EVENTS.CONFIG_UPDATED, {
           clientPersona,
           vendorPersona,
-          prdText,
+          prdText: finalPrdText,
           clientAiConfig,
           vendorAiConfig,
         })
