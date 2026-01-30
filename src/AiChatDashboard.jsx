@@ -1332,7 +1332,9 @@ export default function AiChatDashboard() {
         onClose={() => setIsConfigOpen(false)}
         title="AI 能力配置"
       >
-        <App isEmbedded={true} />
+        <Suspense fallback={<div className="flex items-center justify-center p-8 text-[#71717a]">加载配置中...</div>}>
+          <AppConfig isEmbedded={true} />
+        </Suspense>
       </Modal>
     </div>
   );
