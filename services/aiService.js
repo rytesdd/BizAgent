@@ -47,6 +47,47 @@ const KIMI_DEFAULT_CONFIG = {
 };
 
 // ============================================
+// 乙方人设 (Vendor Personas) - 2026 Pro Edition
+// Strict Character Limit: < 100 chars
+// ============================================
+
+const VENDOR_PERSONAS = {
+  // 1. Empathic Support (卑微安抚型)
+  Empathy_First: `You are a Senior Customer Success Manager.
+TONE: Extremely polite, patient, and empathetic.
+STRATEGY: Acknowledge feelings first, then briefly explain.
+CONSTRAINT (CRITICAL):
+Language: Chinese.
+LENGTH: MUST be under 100 characters. Aim for 50 characters.
+Do not write long paragraphs. One or two warm sentences are enough.
+EXAMPLE OUTPUT:
+"非常抱歉给您带来困扰！关于收费问题，主要是为了保障服务器稳定性。我们会持续优化体验，感谢理解。"`,
+
+  // 2. Strict Scope (严谨技术型)
+  Scope_Defense: `You are a Lead Technical Architect.
+TONE: Cold, objective, professional.
+STRATEGY: Reference the PRD document directly. Reject scope creep firmly.
+CONSTRAINT (CRITICAL):
+Language: Chinese.
+LENGTH: MUST be under 100 characters. Aim for 50 characters.
+Be terse. Cut all fluff.
+EXAMPLE OUTPUT:
+"根据《收费公告》第2条，该功能属于定制开发范畴，不包含在当前SaaS版本中。请联系销售评估工时。"`,
+
+  // 3. Strategic Negotiation (太极大师型)
+  // Maps to "Vague_Delay" in frontend options
+  Vague_Delay: `You are a Strategic Account Director.
+TONE: Collaborative but non-committal.
+STRATEGY: Use "Yes, but..." logic. Pivot to future phases.
+CONSTRAINT (CRITICAL):
+Language: Chinese.
+LENGTH: MUST be under 100 characters. Aim for 50 characters.
+Be vague but professional.
+EXAMPLE OUTPUT:
+"是个好建议！但这会影响当前排期。建议先上线核心功能，这个需求我们放入二期规划重点讨论。"`
+};
+
+// ============================================
 // 运行时配置（可动态修改）
 // ============================================
 
@@ -65,26 +106,35 @@ let runtimeConfig = {
 };
 
 // Mock 回复模板（quoted_text 为 PRD 中被评论的原文片段，用于前端标黄与定位）
+// target_id: Native ID Generation for strict new mode highlighting
 const MOCK_RESPONSES = {
   client_review: [
     {
-      content: "【风险点1】需求文档中未明确用户权限管理的细节，这可能导致后续开发过程中出现权限漏洞。建议补充详细的角色权限矩阵。",
-      at_user: "后端开发",
-      risk_level: "high",
-      quoted_text: "业务规则：任务必须分配给具有相应权限的团队成员。",
-    },
-    {
-      content: "【风险点2】原型图中的交互流程存在循环跳转的可能性，用户可能会陷入死循环。请 UI 同学确认这个流程设计。",
-      at_user: "UI设计",
-      risk_level: "medium",
-      quoted_text: "团队沟通",
-    },
-    {
-      content: "【风险点3】性能指标要求不够具体，'快速响应'是多少毫秒？建议明确具体的 SLA 指标。",
+      content: "【风险点1】SAAS 团队版定价25积分/次，但未说明积分获取方式和成本测算依据，可能导致客户对价值认知不足。建议补充积分价值说明和ROI计算案例。",
       at_user: "产品经理",
-      risk_level: "medium",
-      quoted_text: "任务分配和进度更新应在5秒内完成。",
+      quoted_text: "SAAS 团队版 25积分/次",
+      target_id: "ui-price-card",  // Native ID: targets the pricing card UI element
     },
+    {
+      content: "【风险点2】免费缓冲期至2026年2月25日，但未明确过渡期间的积分消耗是否计入正式账单周期，可能引发客户争议。",
+      at_user: "后端开发",
+      quoted_text: "在 2026 年 1 月 26 日至 2026 年 2 月 25 日期间，您仍可免费使用 AI 快搭和 AI 设计助手",
+      target_id: "comment_1769941481927_3427",  // Native ID: targets the trial period document section
+    },
+    {
+      content: "【风险点3】性能优化功能显示0分/次，但未说明是永久免费还是限时优惠，可能在后续版本变更时引发客户投诉。",
+      at_user: "产品经理",
+      quoted_text: "性能优化 0分/次",
+      target_id: "comment_1769941481927_1241",  // Native ID: targets the performance optimization row
+    },
+  ],
+  thoughts: [
+    "正在初始化多模态视觉扫描模型...",
+    "已识别关键 UI 区域：[定价卡片]、[功能列表]、[底部条款]...",
+    "正在进行 OCR 文字提取与语义分析...",
+    "深度检查：检测到“25积分”与背景对比度略低 (WCAG 标准)...",
+    "逻辑校验：正在比对“免费缓冲期”日期与 SLA 协议数据库...",
+    "正在生成结构化审查建议..."
   ],
   vendor_reply: "收到您的反馈，非常感谢！针对您提出的问题，我们团队已经进行了内部讨论。我们计划在下一版需求文档中补充相关细节，并会在本周五之前提供更新后的版本供您审阅。如有其他疑问，请随时沟通。",
   chat_reply: "我是 AI 助手，正在为您服务。请问有什么可以帮助您的？",
@@ -319,10 +369,10 @@ function initRuntimeConfig(savedConfig) {
     logStep("无持久化配置，使用默认配置");
     return;
   }
-  
+
   // 从持久化配置恢复，但 .env 优先级更高（如果 .env 明确设置了值）
   const envProvider = process.env.AI_PROVIDER?.toLowerCase();
-  
+
   // 如果 .env 是 mock（默认值）且有持久化配置，则使用持久化配置
   // 如果 .env 明确设置了非 mock 值，则以 .env 为准
   if (savedConfig.provider && Object.values(AI_PROVIDERS).includes(savedConfig.provider)) {
@@ -331,7 +381,7 @@ function initRuntimeConfig(savedConfig) {
       runtimeConfig.provider = savedConfig.provider;
     }
   }
-  
+
   if (savedConfig.ollama) {
     if (savedConfig.ollama.model) {
       runtimeConfig.ollama.model = savedConfig.ollama.model;
@@ -341,14 +391,14 @@ function initRuntimeConfig(savedConfig) {
       runtimeConfig.ollama.rawBaseURL = savedConfig.ollama.baseURL.replace("/v1", "");
     }
   }
-  
+
   if (savedConfig.kimi) {
     if (savedConfig.kimi.model) {
       runtimeConfig.kimi.model = savedConfig.kimi.model;
     }
     // Kimi API Key 仅从 .env (KIMI_API_KEY) 读取，不从 db 恢复，避免泄露
   }
-  
+
   logStep("从持久化存储恢复配置", { provider: runtimeConfig.provider, model: getModelName(runtimeConfig.provider) });
 }
 
@@ -485,8 +535,8 @@ function handleMockRequest(messages, responseType) {
 
   // 模拟延迟 (500ms - 1500ms)，PRD 生成稍长 (1500ms - 3000ms)
   const isPrdGeneration = lastMessage.includes("PRD") || lastMessage.includes("prd") || lastMessage.includes("需求文档");
-  const delay = isPrdGeneration 
-    ? Math.floor(Math.random() * 1500) + 1500 
+  const delay = isPrdGeneration
+    ? Math.floor(Math.random() * 1500) + 1500
     : Math.floor(Math.random() * 1000) + 500;
 
   return new Promise((resolve) => {
@@ -538,20 +588,53 @@ async function* handleMockRequestStream(messages) {
 /**
  * 甲方审查文档
  * @param {string} prdText - PRD 文档内容
- * @param {string} persona - 甲方人格设定
- * @param {Object} aiConfig - AI 配置
+ * @param {string} persona - 甲方人格设定 (from db.personas.client or config)
+ * @param {Object} aiConfig - AI 配置 (from db.client_ai_config)
  * @returns {Promise<Array>} 审查评论数组
  */
 async function reviewDocument(prdText, persona, aiConfig = {}) {
-  const temperature = aiConfig?.cognitive_control?.temperature ?? 0.7;
+  const temperature = aiConfig?.cognitive_engine?.thinking_budget ?? 0.7;
+  const reviewerMode = aiConfig?.reviewer_mode || {};
 
-  const systemPrompt = "你是一个严格的技术审查员。你必须只返回严格 JSON 数组，不要添加任何额外文本。";
+  // 1. 解析配置参数
+  const feedbackStyle = reviewerMode.feedback_style || "Constructive"; // Constructive, Harsh, Socratic
+  const pressureLevel = reviewerMode.pressure_level ?? 0.6; // 0.0 - 1.0
+
+  // 2. 构建风格指令
+  let stylePrompt = "";
+  switch (feedbackStyle) {
+    case "Harsh":
+      stylePrompt = "你的风格是非常严厉和直接的。不要客气，直接指出愚蠢的错误。关注每一个细节，即使是微小的问题也不要放过。";
+      break;
+    case "Socratic":
+      stylePrompt = "你的风格是苏格拉底式的。不要直接给出结论，而是通过提问来引导乙方思考潜在的风险。多用反问句。";
+      break;
+    case "Constructive":
+    default:
+      stylePrompt = "你的风格是建设性的。在指出问题的同时，尽量给出改进的方向。语气要专业且客观。";
+      break;
+  }
+
+  // 3. 构建压力/严格程度对于 risk 阈值的指令
+  let pressurePrompt = "";
+  if (pressureLevel > 0.8) {
+    pressurePrompt = "请用【极度严格】的标准审查。任何模糊不清、逻辑不严密、或者可能导致歧义的地方都必须指出。宁可错杀，不可放过。至少找出 5-8 个风险点。";
+  } else if (pressureLevel < 0.3) {
+    pressurePrompt = "请用【宽松】的标准审查。只关注那些会导致项目失败的重大逻辑漏洞或严重合规风险。忽略细枝末节。找出 1-3 个最关键的风险点即可。";
+  } else {
+    pressurePrompt = "请用【标准】的专业标准审查。关注逻辑漏洞、合规风险和需求不明确的地方。找出 3-5 个有价值的风险点。";
+  }
+
+  const systemPrompt = `你是一个严格的技术审查员。你必须只返回严格 JSON 数组，不要添加任何额外文本。
+${stylePrompt}
+${pressurePrompt}`;
+
   const userPrompt = [
     `你是一个审查员，人格设定：${persona}`,
     "请审查以下 PRD 文档，找出其中的风险点。",
     "对于每个风险点：1) 写清问题描述；2) 判断应该 @谁 (UI设计/后端开发/产品经理)；3) 必须从 PRD 中**原样复制**被评论的那一句或一小段原文，作为 quoted_text（用于文档内定位与高亮）。",
     "输出格式（严格 JSON 数组）：",
-    '[{ "content": "问题描述...", "at_user": "角色", "risk_level": "high/medium/low", "quoted_text": "从 PRD 中原样复制的被评论原文" }]',
+    '[{ "content": "问题描述...", "at_user": "角色", "quoted_text": "从 PRD 中原样复制的被评论原文" }]',
     "",
     "PRD 文档内容：",
     prdText,
@@ -575,17 +658,33 @@ async function reviewDocument(prdText, persona, aiConfig = {}) {
  * @returns {Promise<string>} 回复内容
  */
 async function replyToComment(commentContent, prdText, persona, aiConfig = {}) {
-  const temperature = aiConfig?.cognitive_control?.temperature ?? 0.4;
+  const temperature = aiConfig?.cognitive_engine?.thinking_budget ?? 0.4;
+  const replierMode = aiConfig?.replier_mode || {};
 
-  const systemPrompt = "你是乙方项目经理，请保持专业且谨慎。";
+  // 1. 解析配置参数
+  const negotiationStrategy = replierMode.negotiation_strategy || "Empathy_First";
+
+  // 2. 获取 System Prompt (使用新的 VENDOR_PERSONAS 常量)
+  let systemPrompt = VENDOR_PERSONAS[negotiationStrategy];
+
+  // 兜底策略：如果未通过 Strategy 匹配到（例如 Technical_Authority），
+  // 暂时映射到最为接近的 Scope_Defense (严谨技术型)，以保证字数限制生效
+  if (!systemPrompt) {
+    if (negotiationStrategy === "Technical_Authority") {
+      systemPrompt = VENDOR_PERSONAS.Scope_Defense;
+    } else {
+      systemPrompt = VENDOR_PERSONAS.Empathy_First;
+    }
+  }
+
   const userPrompt = [
     `甲方刚才说：${commentContent}`,
-    `人格设定：${persona}`,
+    // 注意：Vendor Personas 已包含角色定义，此处仅保留上下文提示
     "作为乙方，请根据 PRD 上下文生成回复。",
-    "要求：语气符合人格，逻辑自洽，不要瞎承诺。",
+    "请严格遵循 System Prompt 中的策略和字数限制（<100字）。",
     "",
     "PRD 上下文：",
-    prdText || "(空)",
+    prdText ? prdText.slice(0, 3000) + "..." : "(空)", // 截断防止 token 溢出
   ].join("\n");
 
   const messages = [
@@ -708,7 +807,7 @@ ${description}
 
   const prdContent = await callAI(messages, { temperature: 0.6, max_tokens: 8192 });
   logStep("PRD 文档生成完成", { length: prdContent.length });
-  
+
   return prdContent;
 }
 
@@ -889,26 +988,26 @@ function detectPRDCommand(content) {
 
   // 检查是否包含任一关键词
   const matchedKeyword = prdKeywords.find(keyword => content.includes(keyword));
-  
+
   if (!matchedKeyword) {
     return null;
   }
 
   // 提取描述内容：移除关键词前后的常见连接词
   let description = content;
-  
+
   // 常见的前缀模式
   const prefixPatterns = [
-    /^.*?帮我/, 
+    /^.*?帮我/,
     /^.*?请/,
     /^.*?麻烦/,
   ];
-  
+
   // 尝试提取描述部分
   // 方法1：找关键词后的内容
   const keywordIndex = content.indexOf(matchedKeyword);
   const afterKeyword = content.slice(keywordIndex + matchedKeyword.length).trim();
-  
+
   // 移除常见连接词
   description = afterKeyword
     .replace(/^[，,：:。.\s]+/, '')  // 移除开头标点
@@ -1030,7 +1129,7 @@ function getStatus() {
  */
 async function unloadModel(modelName) {
   const provider = getProvider();
-  
+
   if (provider !== AI_PROVIDERS.OLLAMA) {
     return { success: false, message: `当前使用 ${provider} 模式，无需释放` };
   }
@@ -1072,7 +1171,7 @@ async function unloadModel(modelName) {
  */
 async function getOllamaModels() {
   const baseURL = runtimeConfig.ollama.rawBaseURL;
-  
+
   try {
     const response = await fetch(`${baseURL}/api/tags`);
     if (response.ok) {
@@ -1152,7 +1251,7 @@ module.exports = {
   getRuntimeConfig,
   setRuntimeConfig,
   initRuntimeConfig,  // 新增：服务启动时初始化配置
-  
+
   // 模型管理
   unloadModel,
   getOllamaModels,

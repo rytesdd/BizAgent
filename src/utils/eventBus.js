@@ -79,6 +79,9 @@ export const EVENTS = {
   PRD_UPDATED: 'prd:updated', // PRD 文档更新 { prdContent, source: 'chat' | 'upload' | 'manual' }
   PRD_GENERATION_STARTED: 'prd:generation:started', // PRD 生成开始
   PRD_GENERATION_COMPLETED: 'prd:generation:completed', // PRD 生成完成 { prdContent, description }
+
+  // 评论相关事件
+  COMMENT_ADDED: 'comment:added', // 新评论添加 { comment, isAutoReplyCandidate }
 };
 
 export default eventBus;

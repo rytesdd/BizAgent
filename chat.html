@@ -9,5 +9,14 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/chat-main.jsx"></script>
+    <script>
+      // 若脚本未加载或应用未渲染，约 2.5 秒后显示提示（避免白屏）
+      setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && !root.textContent.trim() && root.children.length === 0) {
+          root.innerHTML = '<div style="min-height:100vh;background:#09090b;color:#e4e4e7;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif"><p style="font-size:48px;margin-bottom:16px">⚠️</p><h1 style="font-size:18px;margin-bottom:8px">页面未加载</h1><p style="color:#a1a1aa;font-size:14px;margin-bottom:16px;text-align:center">请先启动前端与后端：在项目目录执行 <code style="background:#27272a;padding:2px 6px;border-radius:4px">npm run dev:all</code></p><p style="color:#71717a;font-size:12px;margin-bottom:24px">然后访问 <strong>http://localhost:5173/chat.html</strong></p><button type="button" onclick="location.reload()" style="padding:10px 20px;background:#27272a;color:#e4e4e7;border:1px solid #3f3f46;border-radius:8px;cursor:pointer;font-size:14px">刷新页面</button></div>';
+        }
+      }, 2500);
+    </script>
   </body>
 </html>

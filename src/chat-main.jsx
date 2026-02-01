@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { XProvider } from '@ant-design/x'
-import AiChatDashboard from './AiChatDashboard.jsx'
+import UnifiedChatEntry from './UnifiedChatEntry'
 import './index.css'
 
 const theme = {
@@ -17,7 +17,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ConfigProvider locale={zhCN} theme={theme}>
       <XProvider>
-        <AiChatDashboard />
+        <Suspense fallback={<div className="h-screen w-screen bg-black flex items-center justify-center text-white">Loading Interface...</div>}>
+          <UnifiedChatEntry />
+        </Suspense>
       </XProvider>
     </ConfigProvider>
   </React.StrictMode>,

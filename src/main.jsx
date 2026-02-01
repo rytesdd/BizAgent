@@ -13,11 +13,15 @@ const theme = {
   },
 }
 
+import StrictFeishuDemo from './StrictFeishuDemo';
+
+const path = window.location.pathname;
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ConfigProvider locale={zhCN} theme={theme}>
       <XProvider>
-        <App />
+        {path.startsWith('/feishu-demo') ? <StrictFeishuDemo /> : <App />}
       </XProvider>
     </ConfigProvider>
   </React.StrictMode>,

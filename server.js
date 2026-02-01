@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const fsp = require("fs").promises;
 const path = require("path");
 const multer = require("multer");
 const dotenv = require("dotenv");
@@ -25,11 +26,11 @@ const AUTHOR_TYPES = {
   // 甲方
   AI_CLIENT: "AI_CLIENT",           // 甲方 AI 自动生成
   HUMAN_CLIENT: "HUMAN_CLIENT",     // 甲方真人
-  
+
   // 乙方
   AI_VENDOR: "AI_VENDOR",           // 乙方 AI 自动生成
   HUMAN_VENDOR: "HUMAN_VENDOR",     // 乙方真人
-  
+
   // 系统
   SYSTEM: "SYSTEM",                 // 系统消息
 };
@@ -41,37 +42,61 @@ const VENDOR_REPLY_RULES = {
   // 是否允许乙方 AI 回复甲方 AI 的评论
   // 当前设置为 false，后续可通过配置开放
   allowReplyToAiClient: false,
-  
+
   // 允许回复的甲方评论类型
   allowedClientTypes: [AUTHOR_TYPES.HUMAN_CLIENT],
 };
 
-// 默认 AI 配置
+// 默认 AI 配置（2026 Agentic AI 结构 + 审查/回复策略）
 const DEFAULT_CLIENT_AI_CONFIG = {
-  cognitive_control: {
-    temperature: 0.7,
-    reasoning_depth: "chain_of_thought",
+  cognitive_engine: {
+    thinking_budget: 0.7,
+    self_reflection_loops: 3,
   },
-  expression_control: {
-    aggression_threshold: 0.7,
-    information_density: 0.5,
+  grounding: {
+    strictness: 0.6,
+    context_project_code: true,
+    context_arch_doc: false,
+    context_web_search: false,
   },
-  strategy_control: {
-    context_grounding: "current_document",
+  agency: {
+    code_sandbox_enabled: false,
+    output_format: "markdown_report",
+  },
+  reviewer_mode: {
+    focus: ["逻辑漏洞", "合规风险", "歧义表达"],
+    strictness: 0.6,
+  },
+  replier_mode: {
+    stance: "discuss",
+    grounding_doc: true,
+    grounding_sop: false,
   },
 };
 
 const DEFAULT_VENDOR_AI_CONFIG = {
-  cognitive_control: {
-    temperature: 0.4,
-    reasoning_depth: "intuitive",
+  cognitive_engine: {
+    thinking_budget: 0.4,
+    self_reflection_loops: 1,
   },
-  expression_control: {
-    aggression_threshold: 0.2,
-    information_density: 0.7,
+  grounding: {
+    strictness: 0.4,
+    context_project_code: true,
+    context_arch_doc: true,
+    context_web_search: false,
   },
-  strategy_control: {
-    context_grounding: "current_document",
+  agency: {
+    code_sandbox_enabled: false,
+    output_format: "markdown_report",
+  },
+  reviewer_mode: {
+    focus: ["逻辑漏洞", "合规风险"],
+    strictness: 0.4,
+  },
+  replier_mode: {
+    stance: "discuss",
+    grounding_doc: true,
+    grounding_sop: false,
   },
 };
 
@@ -119,8 +144,15 @@ function logStep(message, meta) {
 }
 
 // ============================================
-// 数据库操作
+// 数据库操作（内存缓存 + 防抖异步落盘，避免阻塞 I/O）
 // ============================================
+
+/** 内存中的 db 副本，GET 请求直接读缓存，减少磁盘 I/O */
+let dbCache = null;
+
+/** 防抖：距上次 writeDb 1 秒后再写盘，避免频繁同步写阻塞主线程 */
+const DEBOUNCE_WRITE_MS = 1000;
+let writeTimeoutId = null;
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -188,32 +220,55 @@ function ensureDbFile() {
   }
 }
 
+/** 实际写盘（异步），仅由 debouncedFlushDb 调用 */
+function flushDbToDisk() {
+  if (dbCache === null) return;
+  const toWrite = JSON.stringify(dbCache, null, 2);
+  const tempPath = `${DB_PATH}.tmp`;
+  fsp
+    .writeFile(tempPath, toWrite, "utf8")
+    .then(() => fsp.rename(tempPath, DB_PATH))
+    .then(() => logStep("db.json 已异步落盘"))
+    .catch((err) => {
+      fsp.writeFile(DB_PATH, toWrite, "utf8").catch(() => { });
+      if (tempPath) fsp.unlink(tempPath).catch(() => { });
+      logStep("db.json 异步落盘失败，已回退写主文件", { error: String(err) });
+    });
+}
+
+/** 防抖：1 秒内多次 writeDb 只触发一次落盘 */
+function debouncedFlushDb() {
+  if (writeTimeoutId) clearTimeout(writeTimeoutId);
+  writeTimeoutId = setTimeout(() => {
+    writeTimeoutId = null;
+    flushDbToDisk();
+  }, DEBOUNCE_WRITE_MS);
+}
+
 function readDb() {
   ensureDbFile();
+  if (dbCache !== null) {
+    return JSON.parse(JSON.stringify(dbCache));
+  }
   const raw = fs.readFileSync(DB_PATH, "utf8");
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    dbCache = parsed;
+    return JSON.parse(JSON.stringify(parsed));
   } catch (e) {
     logStep("readDb 解析失败，触发修复", { error: String(e) });
-    ensureDbFile(); // 会走 catch 写入 DEFAULT_DB
+    ensureDbFile();
     const retry = fs.readFileSync(DB_PATH, "utf8");
-    return JSON.parse(retry);
+    const parsed = JSON.parse(retry);
+    dbCache = parsed;
+    return JSON.parse(JSON.stringify(parsed));
   }
 }
 
 function writeDb(db) {
   ensureDbFile();
-  const tempPath = `${DB_PATH}.tmp`;
-  try {
-    fs.writeFileSync(tempPath, JSON.stringify(db, null, 2), "utf8");
-    fs.renameSync(tempPath, DB_PATH);
-  } catch (error) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-    }
-    logStep("写入 db.json (fallback)", { error: String(error) });
-  }
+  dbCache = db;
+  debouncedFlushDb();
 }
 
 // ============================================
@@ -259,15 +314,18 @@ function getSessionKeys(viewRole) {
 /**
  * 获取或创建当前会话
  * 包含旧数据迁移逻辑
+ * 返回: { session: Object, modified: boolean }
  */
 function getOrCreateCurrentSession(db, viewRole) {
   const { sessionsKey, currentIdKey, legacyKey, roleName } = getSessionKeys(viewRole);
-  
+  let modified = false;
+
   // 确保会话数组存在
   if (!db[sessionsKey]) {
     db[sessionsKey] = [];
+    // 初始化数组不算作修改数据的理由（除非真有数据要存，否则空数组不需要急着落盘）
   }
-  
+
   // 迁移旧数据（如果存在）
   const legacyMessages = db[legacyKey] || [];
   if (legacyMessages.length > 0 && db[sessionsKey].length === 0) {
@@ -278,23 +336,25 @@ function getOrCreateCurrentSession(db, viewRole) {
     db[currentIdKey] = migratedSession.id;
     db[legacyKey] = []; // 清空旧数据
     logStep(`迁移 ${roleName} 旧聊天记录到会话`, { messageCount: legacyMessages.length, sessionId: migratedSession.id });
+    modified = true;
   }
-  
+
   // 获取当前会话
   let currentSession = null;
   if (db[currentIdKey]) {
     currentSession = db[sessionsKey].find(s => s.id === db[currentIdKey]);
   }
-  
+
   // 如果没有当前会话，创建一个新的
   if (!currentSession) {
     currentSession = createSession(viewRole);
     db[sessionsKey].push(currentSession);
     db[currentIdKey] = currentSession.id;
     logStep(`创建新 ${roleName} 会话`, { sessionId: currentSession.id });
+    modified = true;
   }
-  
-  return currentSession;
+
+  return { session: currentSession, modified };
 }
 
 /**
@@ -317,8 +377,8 @@ function normalizeCommentItem(item, index) {
     author_type: AUTHOR_TYPES.AI_CLIENT, // 甲方 AI 评论
     content: String(item?.content || "").trim(),
     target_user_id: String(item?.at_user || "").trim(),
-    risk_level: String(item?.risk_level || "medium"),
     quoted_text: String(item?.quoted_text || "").trim(), // 被评论的 PRD 原文片段，用于前端黄色下划线与点击定位
+    target_id: item?.target_id || null,  // Native ID Generation: preserve AI-assigned target ID
     reply_content: "",
     reply_author_type: null,
     created_at: new Date().toISOString(),
@@ -330,12 +390,12 @@ function normalizeCommentItem(item, index) {
  */
 function canVendorAiReply(comment) {
   const authorType = comment.author_type;
-  
+
   // 如果是甲方 AI 评论
   if (authorType === AUTHOR_TYPES.AI_CLIENT) {
     return VENDOR_REPLY_RULES.allowReplyToAiClient;
   }
-  
+
   // 检查是否在允许列表中
   return VENDOR_REPLY_RULES.allowedClientTypes.includes(authorType);
 }
@@ -363,7 +423,7 @@ app.post("/api/ai/unload", async (req, res) => {
     const { model } = req.body || {};
     logStep("收到模型释放请求", { model });
     const result = await aiService.unloadModel(model);
-    
+
     if (result.success) {
       res.json({ success: true, data: result });
     } else {
@@ -402,10 +462,10 @@ app.post("/api/ai/config", (req, res) => {
   try {
     const { provider, ollama, kimi } = req.body || {};
     logStep("收到模型配置更新请求", { provider, ollama, kimi });
-    
+
     // 1. 更新运行时配置
     const newConfig = aiService.setRuntimeConfig({ provider, ollama, kimi });
-    
+
     // 2. 持久化到 db.json（Kimi API Key 不写入，仅通过 .env 配置）
     const db = readDb();
     db.model_config = {
@@ -418,11 +478,11 @@ app.post("/api/ai/config", (req, res) => {
     };
     writeDb(db);
     logStep("模型配置已持久化到 db.json");
-    
+
     const status = aiService.getStatus();
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       data: {
         ...newConfig,
         currentModel: status.model,
@@ -600,7 +660,7 @@ app.post("/api/client/review", upload.single("prd_file"), async (req, res) => {
     if (req.file) {
       prdFilePath = path.relative(__dirname, req.file.path);
       fileName = req.file.originalname;
-      
+
       // 使用文件解析服务（支持 PDF、TXT、MD）；传入原始文件名以便识别类型（multer 路径无扩展名）
       const parseResult = await fileParser.parseFile(req.file.path, req.file.originalname);
       if (!parseResult.success) {
@@ -670,14 +730,13 @@ app.post("/api/vendor/handle-comment", async (req, res) => {
 
     const db = readDb();
     const normalizedAuthor = author || AUTHOR_TYPES.HUMAN_CLIENT;
-    
+
     // 创建新评论
     const comment = {
       id: generateId("comment"),
       author_type: normalizedAuthor,
       content: String(commentContent),
       target_user_id: "",
-      risk_level: "medium",
       reply_content: "",
       reply_author_type: null,
       created_at: new Date().toISOString(),
@@ -708,13 +767,13 @@ app.post("/api/vendor/handle-comment", async (req, res) => {
       }
 
       // 返回包含回复的完整评论
-      return res.json({ 
-        success: true, 
-        data: { 
-          ...comment, 
+      return res.json({
+        success: true,
+        data: {
+          ...comment,
           reply_content: replyText.trim(),
           reply_author_type: AUTHOR_TYPES.AI_VENDOR,
-        } 
+        }
       });
     }
 
@@ -732,7 +791,7 @@ app.post("/api/vendor/handle-comment", async (req, res) => {
 app.post("/api/vendor/human-reply", async (req, res) => {
   try {
     const { comment_id: commentId, reply_content: replyContent } = req.body || {};
-    
+
     if (!commentId) {
       return res.status(400).json({ success: false, error: "comment_id 不能为空" });
     }
@@ -792,8 +851,8 @@ app.post("/api/vendor/reply", async (req, res) => {
 
     // 检查回复规则（force 可以绕过规则）
     if (!force && !canVendorAiReply(comment)) {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: `当前规则不允许回复 ${comment.author_type} 类型的评论`,
         hint: "可以设置 force=true 强制回复，或等待后续开放此能力",
       });
@@ -819,6 +878,163 @@ app.post("/api/vendor/reply", async (req, res) => {
 });
 
 // ============================================
+// API: 自动触发乙方 AI 回复（仅限甲方真人评论）
+// ============================================
+
+app.post("/api/vendor/auto-reply", async (req, res) => {
+  try {
+    const { comment_id: commentId } = req.body || {};
+    if (!commentId) {
+      return res.status(400).json({ success: false, error: "comment_id 不能为空" });
+    }
+
+    const db = readDb();
+    const comment = db.comments.find((c) => c.id === commentId);
+
+    if (!comment) {
+      return res.status(404).json({ success: false, error: "评论不存在" });
+    }
+
+    // 检查是否已有回复
+    if (comment.reply_content) {
+      return res.status(400).json({ success: false, error: "该评论已有回复" });
+    }
+
+    // 关键：仅允许回复甲方真人评论，防止 AI 互怼无限循环
+    if (comment.author_type !== AUTHOR_TYPES.HUMAN_CLIENT) {
+      logStep("自动回复跳过", { commentId, author_type: comment.author_type, reason: "非甲方真人评论" });
+      return res.status(400).json({
+        success: false,
+        error: "自动回复仅针对甲方真人评论",
+        skipped: true,
+      });
+    }
+
+    const persona = db.personas?.vendor || DEFAULT_DB.personas.vendor;
+    const prdText = db.project_context?.prd_text || "";
+    const aiConfig = db.vendor_ai_config || DEFAULT_VENDOR_AI_CONFIG;
+
+    logStep("触发自动回复", { commentId, author_type: comment.author_type });
+
+    const replyText = await aiService.replyToComment(comment.content, prdText, persona, aiConfig);
+
+    // 重新读取数据库以获取最新状态
+    const updatedDb = readDb();
+    const updatedComment = updatedDb.comments.find((c) => c.id === commentId);
+    if (updatedComment) {
+      updatedComment.reply_content = replyText.trim();
+      updatedComment.reply_author_type = AUTHOR_TYPES.AI_VENDOR;
+      updatedComment.reply_created_at = new Date().toISOString();
+      writeDb(updatedDb);
+      logStep("自动回复完成", { commentId, replyLength: replyText.length });
+    }
+
+    res.json({ success: true, data: updatedComment || comment });
+  } catch (error) {
+    logStep("自动回复失败", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 自动触发乙方 AI 回复（SSE 流式 + 思维链）
+// ============================================
+
+app.post("/api/vendor/auto-reply-stream", async (req, res) => {
+  // SSE 头
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const sendEvent = (data) => {
+    res.write("data: " + JSON.stringify(data) + "\n\n");
+  };
+
+  try {
+    const { comment_id: commentId } = req.body || {};
+    if (!commentId) {
+      sendEvent({ type: "error", error: "comment_id 不能为空" });
+      return res.end();
+    }
+
+    const db = readDb();
+    const comment = db.comments.find((c) => c.id === commentId);
+
+    if (!comment) {
+      sendEvent({ type: "error", error: "评论不存在" });
+      return res.end();
+    }
+
+    if (comment.reply_content) {
+      sendEvent({ type: "error", error: "该评论已有回复" });
+      return res.end();
+    }
+
+    if (comment.author_type !== AUTHOR_TYPES.HUMAN_CLIENT) {
+      sendEvent({ type: "error", error: "自动回复仅针对甲方真人评论", skipped: true });
+      return res.end();
+    }
+
+    const prdText = db.project_context?.prd_text || "";
+    const persona = db.personas?.vendor || DEFAULT_DB.personas.vendor;
+    const aiConfig = db.vendor_ai_config || DEFAULT_VENDOR_AI_CONFIG;
+
+    // 思维链步骤 1: 分析评论
+    sendEvent({
+      type: "thinking",
+      step: "analyze",
+      title: "分析评论内容",
+      content: comment.content,
+    });
+
+    // 稍作延迟以显示步骤
+    await new Promise((r) => setTimeout(r, 300));
+
+    // 思维链步骤 2: 读取 PRD 上下文
+    const prdSnippet = prdText.slice(0, 200) + (prdText.length > 200 ? "..." : "");
+    sendEvent({
+      type: "thinking",
+      step: "context",
+      title: "读取 PRD 上下文",
+      content: prdSnippet || "(无 PRD 内容)",
+    });
+
+    await new Promise((r) => setTimeout(r, 300));
+
+    // 思维链步骤 3: 开始生成
+    sendEvent({ type: "generating" });
+
+    logStep("触发自动回复（SSE）", { commentId, author_type: comment.author_type });
+
+    const replyText = await aiService.replyToComment(comment.content, prdText, persona, aiConfig);
+
+    // 写入数据库
+    const updatedDb = readDb();
+    const updatedComment = updatedDb.comments.find((c) => c.id === commentId);
+    if (updatedComment) {
+      updatedComment.reply_content = replyText.trim();
+      updatedComment.reply_author_type = AUTHOR_TYPES.AI_VENDOR;
+      updatedComment.reply_created_at = new Date().toISOString();
+      writeDb(updatedDb);
+      logStep("自动回复完成（SSE）", { commentId, replyLength: replyText.length });
+    }
+
+    // 思维链步骤 4: 完成
+    sendEvent({
+      type: "done",
+      reply: replyText.trim(),
+    });
+  } catch (error) {
+    logStep("自动回复失败（SSE）", { error: String(error) });
+    sendEvent({ type: "error", error: error.message || String(error) });
+  }
+
+  res.end();
+});
+
+// ============================================
 // API: 会话管理 - 获取会话列表
 // ============================================
 
@@ -827,14 +1043,16 @@ app.get("/api/chat/sessions", (req, res) => {
     const db = readDb();
     const viewRole = req.query.view_role || "client";
     const { sessionsKey, currentIdKey, roleName } = getSessionKeys(viewRole);
-    
+
     // 确保当前会话存在（触发迁移逻辑）
-    getOrCreateCurrentSession(db, viewRole);
-    writeDb(db);
-    
+    const { modified } = getOrCreateCurrentSession(db, viewRole);
+    if (modified) {
+      writeDb(db);
+    }
+
     const sessions = db[sessionsKey] || [];
     const currentSessionId = db[currentIdKey];
-    
+
     // 返回会话列表（不包含消息内容，减少传输量）
     const sessionList = sessions.map(s => ({
       id: s.id,
@@ -844,7 +1062,7 @@ app.get("/api/chat/sessions", (req, res) => {
       message_count: s.messages?.length || 0,
       is_current: s.id === currentSessionId,
     })).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-    
+
     res.json({
       success: true,
       data: {
@@ -868,19 +1086,19 @@ app.post("/api/chat/sessions", (req, res) => {
     const { view_role, title } = req.body || {};
     const viewRole = view_role || "client";
     const { sessionsKey, currentIdKey, roleName } = getSessionKeys(viewRole);
-    
+
     const db = readDb();
-    
+
     // 创建新会话
     const newSession = createSession(viewRole, title);
-    
+
     if (!db[sessionsKey]) db[sessionsKey] = [];
     db[sessionsKey].push(newSession);
     db[currentIdKey] = newSession.id;
     writeDb(db);
-    
+
     logStep(`创建 ${roleName} 新会话`, { sessionId: newSession.id, title: newSession.title });
-    
+
     res.json({
       success: true,
       data: {
@@ -911,23 +1129,23 @@ app.post("/api/chat/sessions/switch", (req, res) => {
     if (!session_id) {
       return res.status(400).json({ success: false, error: "session_id 不能为空" });
     }
-    
+
     const viewRole = view_role || "client";
     const { sessionsKey, currentIdKey, roleName } = getSessionKeys(viewRole);
-    
+
     const db = readDb();
     const sessions = db[sessionsKey] || [];
     const targetSession = sessions.find(s => s.id === session_id);
-    
+
     if (!targetSession) {
       return res.status(404).json({ success: false, error: "会话不存在" });
     }
-    
+
     db[currentIdKey] = session_id;
     writeDb(db);
-    
+
     logStep(`切换 ${roleName} 会话`, { sessionId: session_id, title: targetSession.title });
-    
+
     res.json({
       success: true,
       data: {
@@ -956,19 +1174,19 @@ app.delete("/api/chat/sessions/:sessionId", (req, res) => {
     const { sessionId } = req.params;
     const viewRole = req.query.view_role || "client";
     const { sessionsKey, currentIdKey, roleName } = getSessionKeys(viewRole);
-    
+
     const db = readDb();
     const sessions = db[sessionsKey] || [];
     const sessionIndex = sessions.findIndex(s => s.id === sessionId);
-    
+
     if (sessionIndex === -1) {
       return res.status(404).json({ success: false, error: "会话不存在" });
     }
-    
+
     const deletedSession = sessions[sessionIndex];
     sessions.splice(sessionIndex, 1);
     db[sessionsKey] = sessions;
-    
+
     // 如果删除的是当前会话，切换到最新的会话或创建新会话
     if (db[currentIdKey] === sessionId) {
       if (sessions.length > 0) {
@@ -982,11 +1200,11 @@ app.delete("/api/chat/sessions/:sessionId", (req, res) => {
         db[currentIdKey] = newSession.id;
       }
     }
-    
+
     writeDb(db);
-    
+
     logStep(`删除 ${roleName} 会话`, { sessionId, title: deletedSession.title });
-    
+
     res.json({
       success: true,
       data: {
@@ -1010,25 +1228,25 @@ app.patch("/api/chat/sessions/:sessionId", (req, res) => {
     const { view_role, title } = req.body || {};
     const viewRole = view_role || "client";
     const { sessionsKey, roleName } = getSessionKeys(viewRole);
-    
+
     if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: "title 不能为空" });
     }
-    
+
     const db = readDb();
     const sessions = db[sessionsKey] || [];
     const session = sessions.find(s => s.id === sessionId);
-    
+
     if (!session) {
       return res.status(404).json({ success: false, error: "会话不存在" });
     }
-    
+
     session.title = title.trim();
     session.updated_at = new Date().toISOString();
     writeDb(db);
-    
+
     logStep(`重命名 ${roleName} 会话`, { sessionId, newTitle: session.title });
-    
+
     res.json({
       success: true,
       data: {
@@ -1058,10 +1276,10 @@ app.post("/api/chat/send", async (req, res) => {
 
     const chatRole = view_role || "client";
     const db = readDb();
-    
+
     // 获取或创建当前会话
-    const currentSession = getOrCreateCurrentSession(db, chatRole);
-    
+    const { session: currentSession } = getOrCreateCurrentSession(db, chatRole);
+
     // 用户消息
     const userMessage = {
       id: generateId("chat"),
@@ -1080,7 +1298,7 @@ app.post("/api/chat/send", async (req, res) => {
     // ============================================
     if (chatRole === "vendor") {
       const prdCommand = aiService.detectPRDCommand(content);
-      
+
       if (prdCommand && prdCommand.isCommand) {
         logStep("检测到乙方 PRD 生成指令（流式）", {
           keyword: prdCommand.keyword,
@@ -1135,7 +1353,7 @@ app.post("/api/chat/send", async (req, res) => {
             created_at: new Date().toISOString(),
           };
 
-          const session = getOrCreateCurrentSession(db, chatRole);
+          const { session } = getOrCreateCurrentSession(db, chatRole);
           session.messages.push(assistantMessage);
           session.updated_at = assistantMessage.created_at;
 
@@ -1159,7 +1377,7 @@ app.post("/api/chat/send", async (req, res) => {
     // ============================================
     // 普通聊天消息处理
     // ============================================
-    
+
     // 生成 AI 回复（根据角色使用不同的 persona）
     const history = currentSession.messages.slice(-10).map((m) => ({
       role: m.role === "user" ? "user" : "assistant",
@@ -1167,10 +1385,10 @@ app.post("/api/chat/send", async (req, res) => {
     }));
 
     // 根据角色获取对应的 persona 和 AI 配置
-    const persona = chatRole === "vendor" 
+    const persona = chatRole === "vendor"
       ? db.personas?.vendor || DEFAULT_DB.personas.vendor
       : db.personas?.client || DEFAULT_DB.personas.client;
-    
+
     const aiConfig = chatRole === "vendor"
       ? db.vendor_ai_config || DEFAULT_VENDOR_AI_CONFIG
       : db.client_ai_config || DEFAULT_CLIENT_AI_CONFIG;
@@ -1191,12 +1409,12 @@ app.post("/api/chat/send", async (req, res) => {
 
     // 重新读取数据库以获取最新状态
     const updatedDb = readDb();
-    const updatedSession = getOrCreateCurrentSession(updatedDb, chatRole);
+    const { session: updatedSession } = getOrCreateCurrentSession(updatedDb, chatRole);
     updatedSession.messages.push(assistantMessage);
     updatedSession.updated_at = assistantMessage.created_at;
     writeDb(updatedDb);
 
-    logStep(`[${chatRole}] Chat 消息`, { 
+    logStep(`[${chatRole}] Chat 消息`, {
       sessionId: currentSession.id,
       userContent: content.slice(0, 50),
     });
@@ -1228,9 +1446,11 @@ app.get("/api/chat/messages", (req, res) => {
     const { currentIdKey } = getSessionKeys(viewRole);
 
     // 获取或创建当前会话
-    const currentSession = getOrCreateCurrentSession(db, viewRole);
-    writeDb(db);
-    
+    const { session: currentSession, modified } = getOrCreateCurrentSession(db, viewRole);
+    if (modified) {
+      writeDb(db);
+    }
+
     let messages = currentSession.messages || [];
 
     if (since) {
@@ -1264,7 +1484,7 @@ app.post("/api/chat/clear", (req, res) => {
     const { sessionsKey, currentIdKey, roleName } = getSessionKeys(chatRole);
 
     const db = readDb();
-    
+
     // 创建新会话
     const newSession = createSession(chatRole);
     if (!db[sessionsKey]) db[sessionsKey] = [];
@@ -1313,6 +1533,115 @@ app.get("/api/comments", (req, res) => {
     });
   } catch (error) {
     logStep("获取评论列表失败", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 创建评论（文档选中评论持久化）
+// ============================================
+
+app.post("/api/comments", (req, res) => {
+  try {
+    const { content, quote, quoted_text, author_type, risk_level, target_id } = req.body || {};
+    const db = readDb();
+    const quotedText = (quote ?? quoted_text ?? "").trim();
+    const comment = {
+      id: generateId("comment"),
+      author_type: author_type || AUTHOR_TYPES.HUMAN_CLIENT,
+      content: String(content ?? "").trim() || "(无内容)",
+      target_user_id: "",
+      risk_level: risk_level || "low",
+      quoted_text: quotedText,
+      target_id: target_id || null,  // Native ID Generation: capture UI/document target
+      reply_content: "",
+      reply_author_type: null,
+      created_at: new Date().toISOString(),
+    };
+    db.comments = db.comments || [];
+    db.comments.push(comment);
+    writeDb(db);
+    logStep("创建评论（选中文本）", { id: comment.id, author_type: comment.author_type });
+    res.json({ success: true, data: comment });
+  } catch (error) {
+    logStep("创建评论失败", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 回复评论（甲乙双方都可以回复任何评论）
+// ============================================
+
+app.post("/api/comments/:id/reply", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reply_content, view_role } = req.body || {};
+
+    if (!reply_content || !reply_content.trim()) {
+      return res.status(400).json({ success: false, error: "回复内容不能为空" });
+    }
+
+    const db = readDb();
+    const comment = db.comments.find(c => c.id === id);
+
+    if (!comment) {
+      return res.status(404).json({ success: false, error: "评论不存在" });
+    }
+
+    // 根据 view_role 确定回复者类型
+    const reply_author_type = view_role === 'vendor' ? 'HUMAN_VENDOR' : 'HUMAN_CLIENT';
+
+    // 更新评论的回复内容
+    comment.reply_content = reply_content.trim();
+    comment.reply_author_type = reply_author_type;
+    comment.reply_created_at = new Date().toISOString();
+
+    writeDb(db);
+
+    logStep("回复评论", { id, reply_author_type, view_role });
+    res.json({ success: true, data: comment });
+  } catch (error) {
+    logStep("回复评论失败", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 删除评论（带隔离：甲方只能删甲方/甲方AI，乙方只能删乙方/乙方AI）
+// ============================================
+
+app.delete("/api/comments/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const view_role = req.query.view_role || "client";
+    const db = readDb();
+
+    const index = db.comments.findIndex(c => c.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, error: "评论不存在" });
+    }
+
+    const comment = db.comments[index];
+
+    // 删除权限隔离
+    const clientTypes = [AUTHOR_TYPES.AI_CLIENT, AUTHOR_TYPES.HUMAN_CLIENT];
+    const vendorTypes = [AUTHOR_TYPES.AI_VENDOR, AUTHOR_TYPES.HUMAN_VENDOR];
+
+    if (view_role === 'client' && !clientTypes.includes(comment.author_type)) {
+      return res.status(403).json({ success: false, error: "无权删除乙方评论" });
+    }
+    if (view_role === 'vendor' && !vendorTypes.includes(comment.author_type)) {
+      return res.status(403).json({ success: false, error: "无权删除甲方评论" });
+    }
+
+    db.comments.splice(index, 1);
+    writeDb(db);
+
+    logStep("删除评论", { id, view_role, author_type: comment.author_type });
+    res.json({ success: true, data: { deleted_id: id } });
+  } catch (error) {
+    logStep("删除评论失败", { error: String(error) });
     res.status(500).json({ success: false, error: String(error) });
   }
 });
@@ -1369,32 +1698,71 @@ app.post("/api/config/persona", async (req, res) => {
 // ============================================
 
 function mergeAiConfig(existing, incoming, defaultConfig) {
+  const def = defaultConfig || {};
   return {
-    cognitive_control: {
-      temperature:
-        incoming?.cognitive_control?.temperature ??
-        existing?.cognitive_control?.temperature ??
-        defaultConfig.cognitive_control.temperature,
-      reasoning_depth:
-        incoming?.cognitive_control?.reasoning_depth ??
-        existing?.cognitive_control?.reasoning_depth ??
-        defaultConfig.cognitive_control.reasoning_depth,
+    cognitive_engine: {
+      thinking_budget:
+        incoming?.cognitive_engine?.thinking_budget ??
+        existing?.cognitive_engine?.thinking_budget ??
+        def.cognitive_engine?.thinking_budget ?? 0.5,
+      self_reflection_loops:
+        incoming?.cognitive_engine?.self_reflection_loops ??
+        existing?.cognitive_engine?.self_reflection_loops ??
+        def.cognitive_engine?.self_reflection_loops ?? 2,
     },
-    expression_control: {
-      aggression_threshold:
-        incoming?.expression_control?.aggression_threshold ??
-        existing?.expression_control?.aggression_threshold ??
-        defaultConfig.expression_control.aggression_threshold,
-      information_density:
-        incoming?.expression_control?.information_density ??
-        existing?.expression_control?.information_density ??
-        defaultConfig.expression_control.information_density,
+    grounding: {
+      strictness:
+        incoming?.grounding?.strictness ??
+        existing?.grounding?.strictness ??
+        def.grounding?.strictness ?? 0.5,
+      context_project_code:
+        incoming?.grounding?.context_project_code ??
+        existing?.grounding?.context_project_code ??
+        def.grounding?.context_project_code ?? true,
+      context_arch_doc:
+        incoming?.grounding?.context_arch_doc ??
+        existing?.grounding?.context_arch_doc ??
+        def.grounding?.context_arch_doc ?? false,
+      context_web_search:
+        incoming?.grounding?.context_web_search ??
+        existing?.grounding?.context_web_search ??
+        def.grounding?.context_web_search ?? false,
     },
-    strategy_control: {
-      context_grounding:
-        incoming?.strategy_control?.context_grounding ??
-        existing?.strategy_control?.context_grounding ??
-        defaultConfig.strategy_control.context_grounding,
+    agency: {
+      code_sandbox_enabled:
+        incoming?.agency?.code_sandbox_enabled ??
+        existing?.agency?.code_sandbox_enabled ??
+        def.agency?.code_sandbox_enabled ?? false,
+      output_format:
+        incoming?.agency?.output_format ??
+        existing?.agency?.output_format ??
+        def.agency?.output_format ?? "markdown_report",
+    },
+    reviewer_mode: {
+      focus:
+        Array.isArray(incoming?.reviewer_mode?.focus)
+          ? incoming.reviewer_mode.focus
+          : Array.isArray(existing?.reviewer_mode?.focus)
+            ? existing.reviewer_mode.focus
+            : def.reviewer_mode?.focus ?? ["逻辑漏洞", "合规风险"],
+      strictness:
+        incoming?.reviewer_mode?.strictness ??
+        existing?.reviewer_mode?.strictness ??
+        def.reviewer_mode?.strictness ?? 0.5,
+    },
+    replier_mode: {
+      stance:
+        incoming?.replier_mode?.stance ??
+        existing?.replier_mode?.stance ??
+        def.replier_mode?.stance ?? "discuss",
+      grounding_doc:
+        incoming?.replier_mode?.grounding_doc ??
+        existing?.replier_mode?.grounding_doc ??
+        def.replier_mode?.grounding_doc ?? true,
+      grounding_sop:
+        incoming?.replier_mode?.grounding_sop ??
+        existing?.replier_mode?.grounding_sop ??
+        def.replier_mode?.grounding_sop ?? false,
     },
   };
 }
@@ -1500,8 +1868,8 @@ app.get("/api/debug/db", async (req, res) => {
   try {
     const db = readDb();
     const aiStatus = aiService.getStatus();
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       data: {
         ...db,
         _ai_status: aiStatus,
@@ -1548,7 +1916,16 @@ try {
 const aiStatus = aiService.getStatus();
 logStep(`AI 服务状态`, aiStatus);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logStep(`服务已启动 http://localhost:${PORT}`);
   logStep(`AI Provider: ${aiStatus.provider}, Model: ${aiStatus.model}`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    logStep(`端口 ${PORT} 已被占用，请关闭占用该端口的进程或设置 PORT=其他端口 后重试`);
+  } else {
+    logStep("服务启动失败", { error: String(err) });
+  }
+  process.exitCode = 1;
 });

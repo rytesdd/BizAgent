@@ -1,0 +1,134 @@
+{
+    "success": true,
+    "data": {
+        "project_context": {
+            "prd_text": "```markdown\n# 关于 AI 企业积分对白名单客户收费调整的公告\n\n尊敬的 MasterGo AI 用户，您好！\n\n非常感谢您一直以来对我们服务的信任与支持。随着 AI 技术的不断提升，为了持续为您提供更优质、稳定且富有创新性的 AI 快搭和 AI 设计助手应用服务，我们将对 AI 企业积分收费策略由免费试用正式进入付费商用。现将具体事宜公告如下：\n\n## 一、调整原因\n\n为了进一步加大在 AI 快搭和 AI 设计助手技术研发上的投入，提升输出物的准确性、优化模型的性能，确保您能获得行业领先的 AI 服务体验。经过全面评估与慎重考虑，我们决定对白名单客户的 AI 企业积分收费进行调整。此次调整旨在更好地平衡服务成本与服务质量，为您带来更具价值的服务。\n\n## 二、调整内容\n\n自 2026 年 2 月 26 日起，AI 企业积分将正式从免费试用模式转变为基于应用场景的收费模式，具体收费规则如下：\n\n### （一）AI 快搭收费规则（积分/次）\n\n| 能力 | 操作 | SAAS 团队版 | SAAS 企业版 | 私有化版 |\n| --- | --- | --- | --- | --- |\n| 大匠 | 生成页面 | 25分/次 | 25分/次 | 25分/次 |\n|  | 更新页面 | 10分/次 | 10分/次 | 10分/次 |\n| 小匠 | 生成页面 | 5分/次 | 15分/次 | 15分/次 |\n|  | 更新页面 | 5分/次 | 5分/次 | 5分/次 |\n\n### （二）AI 设计助手收费规则（积分/次）\n\n| 能力 | SAAS 企业版 | 私有化版 |\n| --- | --- | --- |\n| 文生 | UI | 50分/次 | 50分/次 |\n|  | 修改 UI | 30分/次 | 30分/次 |\n| 图片生成 |  | 10分/次 | 10分/次 |\n| 图片处理 |  | 10分/次 | 10分/次 |\n| 翻译/改写 |  | 10分/次 | 10分/次 |\n| 字体修改 |  | 10分/次 | 10分/次 |\n| 图层重命名 |  | 10分/次 | 10分/次 |\n| 生成图表 |  | 50分/次 | 50分/次 |\n| 生成图标 |  | 10分/次 | 10分/次 |\n| 生成规范 |  | 30分/次 | 30分/次 |\n| 性能优化 |  | 0分/次 | 0分/次 |\n\n## 三、重要的过渡期安排\n\n考虑到此次调整可能对您造成的影响，我们特别制定了过渡方案：\n\n1. **免费缓冲期**：在 2026 年 1 月 26 日至 2026 年 2 月 25 日期间，您仍可免费使用 AI 快搭和 AI 设计助手。\n2. **历史积分保护**：对于在调整生效前已购买且尚未使用完的 AI 积分，不影响您的正常使用。\n\n## 四、如何获取积分\n\n若您希望持续使用 AI 快搭和 AI 设计助手产品，可购买 AI 企业积分套餐。具体信息，您可以联系客户经理，获取专属折扣优惠。\n\n我们深知此次调整可能会给您带来一定的影响，但我们坚信，通过持续的投入与优化，能够为您创造更多的价值。再次感谢您的理解与支持，我们将一如既往地为您提供优质的服务。\n\nMasterGo 产品团队  \n2026 年 1 月 26 日\n```",
+            "prd_file_path": "",
+            "file_name": "",
+            "updated_at": "2026-01-30T13:31:03.148Z"
+        },
+        "personas": {
+            "client": "挑剔技术总监",
+            "vendor": "卑微项目经理"
+        },
+        "client_ai_config": {
+            "cognitive_control": {
+                "temperature": 0.7,
+                "reasoning_depth": "chain_of_thought"
+            },
+            "expression_control": {
+                "aggression_threshold": 0.7,
+                "information_density": 0.5
+            },
+            "strategy_control": {
+                "context_grounding": "current_document"
+            }
+        },
+        "vendor_ai_config": {
+            "cognitive_control": {
+                "temperature": 0.4,
+                "reasoning_depth": "intuitive"
+            },
+            "expression_control": {
+                "aggression_threshold": 0.2,
+                "information_density": 0.7
+            },
+            "strategy_control": {
+                "context_grounding": "current_document"
+            }
+        },
+        "model_config": {
+            "provider": "kimi",
+            "ollama": {
+                "baseURL": "http://localhost:11434/v1",
+                "rawBaseURL": "http://localhost:11434",
+                "model": "qwen3-vl:8b"
+            },
+            "kimi": {
+                "model": "moonshot-v1-128k",
+                "apiKey": ""
+            }
+        },
+        "comments": [],
+        "client_chat_sessions": [
+            {
+                "id": "session_1769775727579_2739",
+                "title": "新对话 2026/1/30 20:22:07",
+                "view_role": "client",
+                "created_at": "2026-01-30T12:22:07.579Z",
+                "updated_at": "2026-01-30T12:22:07.579Z",
+                "messages": []
+            },
+            {
+                "id": "session_1769933718523_669",
+                "title": "新对话 2026/2/1 16:15:18",
+                "view_role": "client",
+                "created_at": "2026-02-01T08:15:18.523Z",
+                "updated_at": "2026-02-01T08:15:18.523Z",
+                "messages": []
+            }
+        ],
+        "vendor_chat_sessions": [
+            {
+                "id": "session_1769775727591_3468",
+                "title": "新对话 2026/1/30 20:22:07",
+                "view_role": "vendor",
+                "created_at": "2026-01-30T12:22:07.591Z",
+                "updated_at": "2026-01-30T12:22:07.591Z",
+                "messages": []
+            }
+        ],
+        "current_client_session_id": "session_1769933718523_669",
+        "current_vendor_session_id": "session_1769775727591_3468",
+        "client_chat_messages": [],
+        "vendor_chat_messages": [],
+        "_ai_status": {
+            "provider": "kimi",
+            "model": "moonshot-v1-128k",
+            "isReady": true,
+            "statusError": null,
+            "config": {
+                "provider": "kimi",
+                "ollama": {
+                    "baseURL": "http://localhost:11434/v1",
+                    "rawBaseURL": "http://localhost:11434",
+                    "model": "qwen3-vl:8b"
+                },
+                "kimi": {
+                    "baseURL": "https://api.moonshot.cn/v1",
+                    "model": "moonshot-v1-128k",
+                    "apiKey": "sk-s131IaLIONBNp3mk4lTP6ccR0PKGkNug4McblNhTY5M9AxDw"
+                }
+            },
+            "availableModels": {
+                "ollama": [
+                    {
+                        "value": "qwen3-vl:8b",
+                        "label": "Qwen3-VL 8B (多模态)",
+                        "multimodal": true
+                    }
+                ],
+                "kimi": [
+                    {
+                        "value": "moonshot-v1-8k",
+                        "label": "Moonshot 8K"
+                    },
+                    {
+                        "value": "moonshot-v1-32k",
+                        "label": "Moonshot 32K"
+                    },
+                    {
+                        "value": "moonshot-v1-128k",
+                        "label": "Moonshot 128K"
+                    }
+                ]
+            }
+        },
+        "_vendor_reply_rules": {
+            "allowReplyToAiClient": false,
+            "allowedClientTypes": [
+                "HUMAN_CLIENT"
+            ]
+        }
+    }
+}

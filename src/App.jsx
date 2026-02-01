@@ -16,18 +16,24 @@ import {
 import { eventBus, EVENTS } from './utils/eventBus'
 import {
   ConfigSlider,
-  ConfigToggle,
-  ConfigSelect,
   ConfigSectionTitle,
+  ConfigCheckbox,
   EmergencyDisconnectButton,
-  DEFAULT_AI_CONFIG,
   DEFAULT_CLIENT_AI_CONFIG,
   DEFAULT_VENDOR_AI_CONFIG,
+  PersonaSelector,
+  FeedbackToneControl,
+  StrategyCardGrid,
+  ResponseLengthSelector,
+  KnowledgeContextSection,
+  HumanReviewToggle,
   AI_CONFIG_TOOLTIPS,
 } from './components/AiConfigControls'
 
+// API 请求超时（毫秒）- 后端未启动时快速失败，避免挂起导致页面假死
+const API_TIMEOUT = 15000
+
 function App({ isEmbedded = false }) {
-  console.log('App component is rendering!');
   const [prdText, setPrdText] = useState('')
   const [prdFile, setPrdFile] = useState(null)
   const [clientPersona, setClientPersona] = useState('挑剔技术总监')
@@ -40,7 +46,7 @@ function App({ isEmbedded = false }) {
   const [activeConfigRole, setActiveConfigRole] = useState('client') // 'client' | 'vendor'
   const [showAiConfig, setShowAiConfig] = useState(true) // 默认展开 AI 配置
   const [activeTab, setActiveTab] = useState('project') // 'project' | 'ai' - Tab 切换状态
-  
+
   // 模型配置状态
   const [showModelConfig, setShowModelConfig] = useState(true) // 默认展开模型配置
   const [modelConfig, setModelConfig] = useState({
@@ -55,7 +61,7 @@ function App({ isEmbedded = false }) {
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [isUnloading, setIsUnloading] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
-  
+
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -68,12 +74,10 @@ function App({ isEmbedded = false }) {
   useEffect(() => {
     const unsubscribeStart = eventBus.on(EVENTS.GENERATION_STARTED, () => {
       setIsLocked(true);
-      console.log('配置已锁定：生成中...');
     });
 
     const unsubscribeComplete = eventBus.on(EVENTS.GENERATION_COMPLETED, () => {
       setIsLocked(false);
-      console.log('配置已解锁：生成完成');
     });
 
     return () => {
@@ -120,7 +124,7 @@ function App({ isEmbedded = false }) {
   // 获取 AI 配置（同时获取甲乙方）
   const fetchAiConfig = async () => {
     try {
-      const response = await axios.get('/api/config/ai')
+      const response = await axios.get('/api/config/ai', { timeout: API_TIMEOUT })
       if (response.data.success && response.data.data) {
         const { client, vendor } = response.data.data
         if (client) {
@@ -138,7 +142,7 @@ function App({ isEmbedded = false }) {
   // 获取模型配置
   const fetchModelConfig = async () => {
     try {
-      const response = await axios.get('/api/ai/config')
+      const response = await axios.get('/api/ai/config', { timeout: API_TIMEOUT })
       if (response.data.success && response.data.data) {
         const { provider, ollama, kimi, availableModels: models } = response.data.data
         const config = { provider, ollama, kimi }
@@ -157,7 +161,7 @@ function App({ isEmbedded = false }) {
   const fetchInstalledOllamaModels = async () => {
     setIsLoadingModels(true)
     try {
-      const response = await axios.get('/api/ai/ollama-models')
+      const response = await axios.get('/api/ai/ollama-models', { timeout: API_TIMEOUT })
       if (response.data.success && response.data.data?.models) {
         setInstalledOllamaModels(response.data.data.models)
       }
@@ -171,17 +175,17 @@ function App({ isEmbedded = false }) {
   // 检查模型配置是否有变化
   const isModelConfigChanged = () => {
     if (!savedModelConfig) return true // 还没加载完成时允许保存
-    
+
     // 比较 provider
     if (modelConfig.provider !== savedModelConfig.provider) return true
-    
+
     // 比较 ollama 配置
     if (modelConfig.ollama?.model !== savedModelConfig.ollama?.model) return true
-    
+
     // 比较 kimi 配置
     if (modelConfig.kimi?.model !== savedModelConfig.kimi?.model) return true
     if (modelConfig.kimi?.apiKey !== savedModelConfig.kimi?.apiKey) return true
-    
+
     return false
   }
 
@@ -214,7 +218,7 @@ function App({ isEmbedded = false }) {
   // 释放 Ollama 模型
   const handleUnloadModel = async () => {
     if (isUnloading) return
-    
+
     setIsUnloading(true)
     try {
       const response = await axios.post('/api/ai/unload', { model: modelConfig.ollama?.model })
@@ -263,7 +267,7 @@ function App({ isEmbedded = false }) {
   // 获取初始配置数据
   const fetchInitialData = async () => {
     try {
-      const response = await axios.get('/api/debug/db')
+      const response = await axios.get('/api/debug/db', { timeout: API_TIMEOUT })
       if (response.data.success) {
         setClientPersona(response.data.data.personas?.client || '挑剔技术总监')
         setVendorPersona(response.data.data.personas?.vendor || '卑微项目经理')
@@ -357,6 +361,11 @@ function App({ isEmbedded = false }) {
     }
   }
 
+  // 添加外部知识的处理函数
+  const handleAddKnowledge = () => {
+    showToast('外部知识库功能开发中...', 'info')
+  }
+
   // 嵌入模式下使用暗色主题
   const containerClass = isEmbedded
     ? 'min-h-full bg-[#09090b] text-[#f4f4f5]'
@@ -384,11 +393,10 @@ function App({ isEmbedded = false }) {
       {toast && (
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top duration-300">
           <div
-            className={`rounded-lg border px-4 py-3 shadow-lg ${
-              toast.type === 'error'
+            className={`rounded-lg border px-4 py-3 shadow-lg ${toast.type === 'error'
                 ? 'border-red-200 bg-red-50 text-red-900'
                 : 'border-green-200 bg-green-50 text-green-900'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               {toast.type === 'error' ? (
@@ -435,46 +443,43 @@ function App({ isEmbedded = false }) {
           ? 'p-6'
           : 'rounded-xl border border-slate-200 bg-white p-6 shadow-sm'
         }>
-              {/* Tab 切换栏 */}
-              <div className={`mb-6 flex rounded-lg border overflow-hidden ${
-                isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
-              }`}>
-                {/* 主 Tab：选中态为下划线，与子 Tab 色块区分 */}
-                <button
-                  onClick={() => setActiveTab('project')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                    activeTab === 'project'
-                      ? isEmbedded 
-                        ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
-                        : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
-                      : isEmbedded
-                        ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
-                        : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
-                  }`}
-                >
-                  <Settings className="h-4 w-4" />
-                  <span>项目配置</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('ai')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                    activeTab === 'ai'
-                      ? isEmbedded 
-                        ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
-                        : 'bg-white text-primary border-b-2 border-primary'
-                      : isEmbedded
-                        ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                        : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                  }`}
-                >
-                  <Brain className="h-4 w-4" />
-                  <span>AI 能力配置</span>
-                </button>
-              </div>
+          {/* Tab 切换栏 */}
+          <div className={`mb-6 flex rounded-lg border overflow-hidden ${isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
+            }`}>
+            {/* 主 Tab：选中态为下划线，与子 Tab 色块区分 */}
+            <button
+              onClick={() => setActiveTab('project')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'project'
+                  ? isEmbedded
+                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
+                    : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
+                  : isEmbedded
+                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
+                }`}
+            >
+              <Settings className="h-4 w-4" />
+              <span>项目配置</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('ai')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'ai'
+                  ? isEmbedded
+                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
+                    : 'bg-white text-primary border-b-2 border-primary'
+                  : isEmbedded
+                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                }`}
+            >
+              <Brain className="h-4 w-4" />
+              <span>AI 能力配置</span>
+            </button>
+          </div>
 
-              {/* ========== 项目配置 Tab 内容 ========== */}
-              {activeTab === 'project' && (
-                <>
+          {/* ========== 项目配置 Tab 内容 ========== */}
+          {activeTab === 'project' && (
+            <>
               {/* PRD Input - 仅上传文档 */}
               <div className="mb-6">
                 <div className="mt-2">
@@ -489,11 +494,10 @@ function App({ isEmbedded = false }) {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isLocked}
-                    className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isEmbedded
+                    className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
                         ? 'border-[#27272a] bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a]'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <Upload className="h-4 w-4" />
                     上传文档
@@ -511,18 +515,16 @@ function App({ isEmbedded = false }) {
                 {/* 标题栏 - 可折叠 */}
                 <button
                   onClick={() => setShowModelConfig(!showModelConfig)}
-                  className={`w-full mb-4 flex items-center justify-between group ${
-                    isEmbedded ? 'text-[#f4f4f5]' : 'text-slate-900'
-                  }`}
+                  className={`w-full mb-4 flex items-center justify-between group ${isEmbedded ? 'text-[#f4f4f5]' : 'text-slate-900'
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <Cpu className={`h-5 w-5 ${isEmbedded ? 'text-[#10b981]' : 'text-emerald-500'}`} />
                     <h3 className="text-sm font-semibold">模型配置</h3>
                   </div>
                   <ChevronDown
-                    className={`h-4 w-4 transition-transform duration-200 ${
-                      showModelConfig ? 'rotate-180' : ''
-                    } ${isEmbedded ? 'text-[#71717a]' : 'text-slate-400'}`}
+                    className={`h-4 w-4 transition-transform duration-200 ${showModelConfig ? 'rotate-180' : ''
+                      } ${isEmbedded ? 'text-[#71717a]' : 'text-slate-400'}`}
                   />
                 </button>
 
@@ -546,11 +548,10 @@ function App({ isEmbedded = false }) {
                             key={opt.value}
                             onClick={() => !isLocked && handleModelConfigChange('provider', opt.value)}
                             disabled={isLocked}
-                            className={`flex-1 px-3 py-2 text-xs font-medium transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${
-                              modelConfig.provider === opt.value
+                            className={`flex-1 px-3 py-2 text-xs font-medium transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${modelConfig.provider === opt.value
                                 ? 'bg-[#10b981]/20 text-[#10b981]'
                                 : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                            } disabled:opacity-50 disabled:cursor-not-allowed border-r border-[#27272a] last:border-r-0`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed border-r border-[#27272a] last:border-r-0`}
                           >
                             <span>{opt.label}</span>
                           </button>
@@ -575,7 +576,7 @@ function App({ isEmbedded = false }) {
                             刷新列表
                           </button>
                         </div>
-                        
+
                         {/* 模型选择 */}
                         <div>
                           <label className={`mb-1 block text-xs ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-600'}`}>
@@ -585,11 +586,10 @@ function App({ isEmbedded = false }) {
                             value={modelConfig.ollama?.model || ''}
                             onChange={(e) => handleModelConfigChange('ollama.model', e.target.value)}
                             disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isEmbedded
+                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
                                 ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
                                 : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                            }`}
+                              }`}
                           >
                             <optgroup label="推荐模型">
                               {availableModels.ollama?.map((m) => (
@@ -638,7 +638,7 @@ function App({ isEmbedded = false }) {
                         : 'space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
                       }>
                         <span className="text-xs text-[#71717a]">Kimi (Moonshot) API</span>
-                        
+
                         {/* API Key */}
                         <div>
                           <label className={`mb-1 block text-xs ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-600'}`}>
@@ -650,11 +650,10 @@ function App({ isEmbedded = false }) {
                             onChange={(e) => handleModelConfigChange('kimi.apiKey', e.target.value)}
                             placeholder="sk-..."
                             disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isEmbedded
+                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
                                 ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
                                 : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                            }`}
+                              }`}
                           />
                         </div>
 
@@ -667,11 +666,10 @@ function App({ isEmbedded = false }) {
                             value={modelConfig.kimi?.model || ''}
                             onChange={(e) => handleModelConfigChange('kimi.model', e.target.value)}
                             disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isEmbedded
+                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
                                 ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
                                 : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                            }`}
+                              }`}
                           >
                             {availableModels.kimi?.map((m) => (
                               <option key={m.value} value={m.value}>
@@ -699,15 +697,14 @@ function App({ isEmbedded = false }) {
                     <button
                       onClick={saveModelConfig}
                       disabled={isSavingModel || isLocked || !isModelConfigChanged()}
-                      className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                        isEmbedded
-                          ? isModelConfigChanged() 
+                      className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
+                          ? isModelConfigChanged()
                             ? 'bg-[#10b981] text-white hover:bg-[#059669]'
                             : 'bg-[#27272a] text-[#71717a]'
                           : isModelConfigChanged()
                             ? 'bg-emerald-500 text-white hover:bg-emerald-600'
                             : 'bg-slate-200 text-slate-500'
-                      }`}
+                        }`}
                     >
                       {isSavingModel ? (
                         <>
@@ -729,168 +726,175 @@ function App({ isEmbedded = false }) {
                   </div>
                 )}
               </div>
-                </>
-              )}
+            </>
+          )}
 
-              {/* ========== AI 能力配置 Tab 内容 ========== */}
-              {activeTab === 'ai' && (
-                <div className="space-y-4">
-                    {/* 甲乙方角色切换 Tab */}
-                    <div className="flex rounded-lg border border-[#27272a] overflow-hidden">
-                      <button
-                        onClick={() => !isLocked && setActiveConfigRole('client')}
-                        disabled={isLocked}
-                        className={`flex-1 px-3 py-2 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
-                          activeConfigRole === 'client'
-                            ? 'bg-red-500/20 text-red-400 border-r border-red-500/30'
-                            : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <span>🔴</span>
-                        <span>甲方配置</span>
-                      </button>
-                      <button
-                        onClick={() => !isLocked && setActiveConfigRole('vendor')}
-                        disabled={isLocked}
-                        className={`flex-1 px-3 py-2 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
-                          activeConfigRole === 'vendor'
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <span>🔵</span>
-                        <span>乙方配置</span>
-                      </button>
-                    </div>
-
-                    {/* 当前角色提示 */}
-                    <div className={`text-xs px-3 py-2 rounded-lg ${
-                      activeConfigRole === 'client' 
-                        ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
-                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                    }`}>
-                      {activeConfigRole === 'client' 
-                        ? '⚡ 甲方 AI：审查员视角，更尖锐、更挑剔'
-                        : '🛡️ 乙方 AI：项目经理视角，更温和、更详尽'}
-                    </div>
-
-                    {/* 人设（甲/乙方 AI 行为风格）- 仅显示当前选中角色的人设 */}
-                    <div className="space-y-4">
-                      <ConfigSectionTitle icon="👤" title="人设" />
-                      {activeConfigRole === 'client' && (
-                        <div>
-                          <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                            甲方人设
-                          </label>
-                          <input
-                            type="text"
-                            value={clientPersona}
-                            onChange={(e) => setClientPersona(e.target.value)}
-                            disabled={isLocked}
-                            placeholder="如：挑剔技术总监"
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isEmbedded
-                                ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                                : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
-                            }`}
-                          />
-                        </div>
-                      )}
-                      {activeConfigRole === 'vendor' && (
-                        <div>
-                          <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                            乙方人设
-                          </label>
-                          <input
-                            type="text"
-                            value={vendorPersona}
-                            onChange={(e) => setVendorPersona(e.target.value)}
-                            disabled={isLocked}
-                            placeholder="如：卑微项目经理"
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                              isEmbedded
-                                ? 'border-[#27272a] bg-[#09090b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                                : 'border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-slate-400 focus:ring-slate-200'
-                            }`}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 认知控制 */}
-                    <div className="space-y-4">
-                      <ConfigSectionTitle icon="📊" title="认知控制" />
-                      <ConfigSlider
-                        label="思维发散度"
-                        tooltip={AI_CONFIG_TOOLTIPS.temperature}
-                        value={getCurrentAiConfig().cognitive_control.temperature}
-                        leftLabel="收敛"
-                        rightLabel="发散"
-                        onChange={(v) => handleAiConfigChange('cognitive_control.temperature', v)}
-                        disabled={isLocked}
-                      />
-                      <ConfigToggle
-                        label="推理深度"
-                        tooltip={AI_CONFIG_TOOLTIPS.reasoning_depth}
-                        options={[
-                          { value: 'intuitive', label: '直觉反应' },
-                          { value: 'chain_of_thought', label: '深度思维链' },
-                        ]}
-                        value={getCurrentAiConfig().cognitive_control.reasoning_depth}
-                        onChange={(v) => handleAiConfigChange('cognitive_control.reasoning_depth', v)}
-                        disabled={isLocked}
-                      />
-                    </div>
-
-                    {/* 表达控制 */}
-                    <div className="space-y-4">
-                      <ConfigSectionTitle icon="💬" title="表达控制" />
-                      <ConfigSlider
-                        label="攻击性阈值"
-                        tooltip={AI_CONFIG_TOOLTIPS.aggression_threshold}
-                        value={getCurrentAiConfig().expression_control.aggression_threshold}
-                        leftLabel="温和建议"
-                        rightLabel="尖锐对立"
-                        onChange={(v) => handleAiConfigChange('expression_control.aggression_threshold', v)}
-                        disabled={isLocked}
-                      />
-                      <ConfigSlider
-                        label="信息饱和度"
-                        tooltip={AI_CONFIG_TOOLTIPS.information_density}
-                        value={getCurrentAiConfig().expression_control.information_density}
-                        leftLabel="简练"
-                        rightLabel="详尽"
-                        onChange={(v) => handleAiConfigChange('expression_control.information_density', v)}
-                        disabled={isLocked}
-                      />
-                    </div>
-
-                    {/* 策略控制 */}
-                    <div className="space-y-4">
-                      <ConfigSectionTitle icon="🎯" title="策略控制" />
-                      <ConfigSelect
-                        label="知识回溯范围"
-                        tooltip={AI_CONFIG_TOOLTIPS.context_grounding}
-                        options={[
-                          { value: 'current_document', label: '仅当前文档' },
-                          { value: 'global_knowledge', label: '全局知识库' },
-                        ]}
-                        value={getCurrentAiConfig().strategy_control.context_grounding}
-                        onChange={(v) => handleAiConfigChange('strategy_control.context_grounding', v)}
-                        disabled={isLocked}
-                      />
-                    </div>
+          {/* ========== AI 能力配置 Tab 内容（Pro-Level 重构） ========== */}
+          {activeTab === 'ai' && (
+            <div className="flex flex-col min-h-0 flex-1">
+              {/* 固定头部：标题 + 甲乙方切换 */}
+              <div className="shrink-0 space-y-4 mb-6">
+                {/* 甲乙方切换 Tab */}
+                <div className="flex rounded-xl border border-[#27272a] overflow-hidden bg-[#18181b] p-1">
+                  <button
+                    onClick={() => !isLocked && setActiveConfigRole('client')}
+                    disabled={isLocked}
+                    className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'client'
+                        ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-400 shadow-sm'
+                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <span className="text-lg">🔴</span>
+                    <span>甲方配置</span>
+                    <span className="text-xs opacity-60">(Client)</span>
+                  </button>
+                  <button
+                    onClick={() => !isLocked && setActiveConfigRole('vendor')}
+                    disabled={isLocked}
+                    className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'vendor'
+                        ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-blue-400 shadow-sm'
+                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <span className="text-lg">🔵</span>
+                    <span>乙方配置</span>
+                    <span className="text-xs opacity-60">(Vendor)</span>
+                  </button>
                 </div>
-              )}
 
+                {/* 角色描述 */}
+                <div className={`px-4 py-3 rounded-xl border ${activeConfigRole === 'client'
+                    ? 'border-red-500/20 bg-red-500/5'
+                    : 'border-blue-500/20 bg-blue-500/5'
+                  }`}>
+                  <p className="text-xs text-[#a1a1aa]">
+                    {activeConfigRole === 'client'
+                      ? '💼 甲方 AI：作为客户/老板审查文档，发现问题并提出质疑'
+                      : '🛠️ 乙方 AI：作为承包方回复评论，捍卫方案并解答疑问'}
+                  </p>
+                </div>
+              </div>
+
+              {/* 可滚动表单 */}
+              <div className="max-h-[55vh] min-h-0 overflow-y-auto no-scrollbar space-y-6 pr-1">
+
+                {/* ========== 甲方配置 (Client - Red Theme) ========== */}
+                {activeConfigRole === 'client' && (
+                  <>
+                    {/* 审查策略区块 */}
+                    <div className="space-y-5">
+                      <ConfigSectionTitle
+                        icon="🕵️"
+                        title="Reviewer Mode (审查策略)"
+                        accentColor="red"
+                      />
+
+                      {/* 角色/人设选择器 */}
+                      <PersonaSelector
+                        value={getCurrentAiConfig().reviewer_mode?.persona ?? 'Product_Owner'}
+                        onChange={(v) => handleAiConfigChange('reviewer_mode.persona', v)}
+                        disabled={isLocked}
+                      />
+
+                      {/* 压力测试等级滑块 */}
+                      <ConfigSlider
+                        label="压力测试等级 (Pressure Level)"
+                        tooltip={AI_CONFIG_TOOLTIPS.pressure_level}
+                        value={getCurrentAiConfig().reviewer_mode?.pressure_level ?? 0.5}
+                        leftLabel="宽松审查"
+                        rightLabel="像素级挑刺"
+                        onChange={(v) => handleAiConfigChange('reviewer_mode.pressure_level', v)}
+                        disabled={isLocked}
+                        accentColor="red"
+                      />
+
+                      {/* 反馈风格选择器 */}
+                      <FeedbackToneControl
+                        value={getCurrentAiConfig().reviewer_mode?.feedback_style ?? 'Constructive'}
+                        onChange={(v) => handleAiConfigChange('reviewer_mode.feedback_style', v)}
+                        disabled={isLocked}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* ========== 乙方配置 (Vendor - Blue Theme) ========== */}
+                {activeConfigRole === 'vendor' && (
+                  <>
+                    {/* 回复策略区块 */}
+                    <div className="space-y-5">
+                      <ConfigSectionTitle
+                        icon="🛡️"
+                        title="Replier Mode (回复策略)"
+                        accentColor="blue"
+                      />
+
+                      {/* 谈判策略卡片 */}
+                      <StrategyCardGrid
+                        value={getCurrentAiConfig().replier_mode?.negotiation_strategy ?? 'Empathy_First'}
+                        onChange={(v) => handleAiConfigChange('replier_mode.negotiation_strategy', v)}
+                        disabled={isLocked}
+                      />
+
+                      {/* 输出风格选择器 */}
+                      <ResponseLengthSelector
+                        value={getCurrentAiConfig().replier_mode?.response_length ?? 'Detailed'}
+                        onChange={(v) => handleAiConfigChange('replier_mode.response_length', v)}
+                        disabled={isLocked}
+                      />
+
+                      {/* 回复依据 */}
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium text-[#e4e4e7]">回复依据 (Grounding)</label>
+                        <div className="grid grid-cols-1 gap-2">
+                          <ConfigCheckbox
+                            label="基于本文档"
+                            checked={getCurrentAiConfig().replier_mode?.grounding_doc ?? true}
+                            onChange={(v) => handleAiConfigChange('replier_mode.grounding_doc', v)}
+                            disabled={isLocked}
+                          />
+                          <ConfigCheckbox
+                            label="基于历史会议纪要 (SOP)"
+                            checked={getCurrentAiConfig().replier_mode?.grounding_sop ?? false}
+                            onChange={(v) => handleAiConfigChange('replier_mode.grounding_sop', v)}
+                            disabled={isLocked}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* ========== 公共区域：知识上下文 & 人工审核 ========== */}
+                <div className="pt-4 border-t border-[#27272a] space-y-5">
+                  {/* 知识上下文 */}
+                  <KnowledgeContextSection
+                    knowledgeBase={getCurrentAiConfig().global?.knowledge_base ?? []}
+                    currentDocChecked={getCurrentAiConfig().global?.current_doc_enabled ?? true}
+                    onToggleCurrentDoc={(v) => handleAiConfigChange('global.current_doc_enabled', v)}
+                    onAddKnowledge={handleAddKnowledge}
+                    disabled={isLocked}
+                  />
+
+                  {/* 人工审核开关 */}
+                  <HumanReviewToggle
+                    checked={getCurrentAiConfig().global?.human_review_required ?? false}
+                    onChange={(v) => handleAiConfigChange('global.human_review_required', v)}
+                    disabled={isLocked}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 保存配置按钮 */}
           <button
             onClick={handleSavePersona}
             disabled={isSavingPersona || isLocked}
-            className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              isEmbedded
-                ? 'bg-[#165dff] text-white hover:bg-[#1e6fff]'
+            className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mt-6 ${isEmbedded
+                ? 'bg-gradient-to-r from-[#165dff] to-[#1e6fff] text-white hover:shadow-lg hover:shadow-[#165dff]/25'
                 : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            }`}
+              }`}
           >
             {isSavingPersona ? (
               <>

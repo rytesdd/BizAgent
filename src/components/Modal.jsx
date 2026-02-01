@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 
 /**
  * Modal 弹窗组件
- * shadcn UI 风格，暗色主题
+ * 简约暗色主题：zinc-900 背景、zinc-800 边框
+ * 布局：固定头部 / 可滚动内容（无滚动条）/ 固定底部
  */
-export default function Modal({ isOpen, onClose, title, children }) {
+export default function Modal({ isOpen, onClose, title, children, footer }) {
   // ESC 键关闭
   useEffect(() => {
     const handleEsc = (e) => {
@@ -30,6 +31,9 @@ export default function Modal({ isOpen, onClose, title, children }) {
 
   if (!isOpen) return null;
 
+  const hasHeader = Boolean(title);
+  const hasFooter = Boolean(footer);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* 遮罩层 - 点击关闭 */}
@@ -38,15 +42,15 @@ export default function Modal({ isOpen, onClose, title, children }) {
         onClick={onClose}
       />
 
-      {/* 弹窗内容 */}
-      <div className="relative w-fit max-w-[90vw] h-[85vh] bg-[#09090b] border border-[#27272a] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* 头部 */}
-        {title && (
-          <div className="flex items-center justify-between h-[56px] px-8 border-b border-[#27272a] bg-[#09090b]">
-            <h2 className="text-lg font-semibold text-[#f4f4f5]">{title}</h2>
+      {/* 弹窗：flex 列布局 */}
+      <div className="relative flex flex-col w-fit max-w-[90vw] h-[85vh] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* 固定头部 */}
+        {hasHeader && (
+          <div className="flex shrink-0 items-center justify-between h-14 px-6 border-b border-zinc-800 bg-zinc-900">
+            <h2 className="text-lg font-semibold text-zinc-100">{title}</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-[#71717a] hover:text-[#f4f4f5] hover:bg-[#27272a] transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
               aria-label="关闭"
             >
               <svg
@@ -68,17 +72,19 @@ export default function Modal({ isOpen, onClose, title, children }) {
           </div>
         )}
 
-        {/* 内容区域 */}
+        {/* 可滚动内容区（滚动条隐藏） */}
         <div
-          className={`overflow-auto px-8 ${title ? 'h-[calc(100%-56px)]' : 'h-full'}`}
-          style={{
-            // 暗色滚动条样式
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#3f3f46 transparent',
-          }}
+          className={`flex-1 min-h-0 overflow-y-auto no-scrollbar px-6 ${hasHeader ? '' : 'pt-6'} ${hasFooter ? 'pb-4' : 'pb-6'}`}
         >
           {children}
         </div>
+
+        {/* 固定底部 */}
+        {hasFooter && (
+          <div className="shrink-0 border-t border-zinc-800 bg-zinc-900 px-6 py-4">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

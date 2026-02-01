@@ -6,6 +6,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-size: 12px;
@@ -14,7 +15,8 @@
 }
 
 /* 禁止整页滚动，确保只有指定区域可以滚动 */
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -40,25 +42,30 @@ html, body {
 .chat-panel-dark textarea.ant-input {
   color: #fff !important;
 }
+
 .chat-panel-dark .ant-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
+
 /* 用户消息：背景 #282A2C，文字 #E3E3E3 */
 .chat-panel-dark .ant-bubble[role="user"] .ant-bubble-content,
 .chat-panel-dark .ant-bubble.ant-bubble-end .ant-bubble-content {
   background-color: #282A2C;
   color: #E3E3E3 !important;
 }
+
 .chat-panel-dark .ant-bubble[role="user"] .ant-bubble-content *,
 .chat-panel-dark .ant-bubble.ant-bubble-end .ant-bubble-content * {
   color: #E3E3E3 !important;
 }
+
 /* AI 回复：透明背景，沿用聊天区域背景，文字 #E3E3E3 */
 .chat-panel-dark .ant-bubble[role="ai"] .ant-bubble-content,
 .chat-panel-dark .ant-bubble.ant-bubble-start .ant-bubble-content {
   background-color: transparent;
   color: #E3E3E3 !important;
 }
+
 .chat-panel-dark .ant-bubble[role="ai"] .ant-bubble-content *,
 .chat-panel-dark .ant-bubble.ant-bubble-start .ant-bubble-content * {
   color: #E3E3E3 !important;
@@ -68,6 +75,7 @@ html, body {
 .chat-panel-dark .ant-sender-actions-btn.ant-btn-primary {
   background-color: rgba(84, 84, 84, 1) !important;
 }
+
 .chat-panel-dark .ant-sender-actions-btn.ant-btn-primary:hover {
   background-color: rgba(64, 64, 64, 1) !important;
 }
@@ -77,8 +85,22 @@ html, body {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Invisible scrollbar utility (modal / panels) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari and Opera */
 }
 
 /* 竖排文字 */
@@ -91,6 +113,7 @@ html, body {
 html {
   font-size: 12px !important;
 }
+
 body,
 body *,
 input,
@@ -99,7 +122,12 @@ button,
 select,
 span,
 p,
-h1, h2, h3, h4, h5, h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
 label,
 div,
 a,
@@ -111,8 +139,8 @@ th {
 
 /* 评论对应原文高亮：点击右侧评论卡片后文档内定位并高亮（默认态） */
 .highlight-target {
-  border-bottom: 2px solid #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.5);
+  background: transparent;
   border-radius: 2px;
   padding: 0 2px;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -120,8 +148,117 @@ th {
 
 /* 文档内选中态：与右侧评论卡片联动 */
 .highlight-target.highlight-active {
-  background: rgba(245, 158, 11, 0.4);
-  border-left: 4px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.55);
+  border-left: 5px solid #d97706;
   border-bottom: 2px solid #f59e0b;
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
+}
+
+/* 文本选中评论：浮动条淡入 */
+@keyframes comment-toolbar-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.comment-toolbar-enter {
+  animation: comment-toolbar-fade-in 0.15s ease-out;
+}
+
+/* 文本选中评论：输入框淡入 + 缩放 */
+@keyframes comment-popover-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.comment-input-popover-enter {
+  animation: comment-popover-enter 0.2s ease-out;
+}
+
+/* ============================================
+   Global Custom Scrollbar (Modern & Minimalist)
+   ============================================ */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+*::-webkit-scrollbar {
+  width: 6px;
+  /* Slim width */
+  height: 6px;
+  /* Slim height */
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  /* Transparent track */
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  /* Default: subtle */
+  border-radius: 10px;
+  /* Pill shape */
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+  /* Hover: visible */
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================
+   思维链单行文本滚动动画
+   ============================================ */
+
+/* 思维链文本容器：内容超出时自动滚动 */
+.thought-chain-scroll {
+  animation: thought-chain-auto-scroll 10s linear infinite;
+}
+
+@keyframes thought-chain-auto-scroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* 文本过渡动画：平滑切换思维链内容 */
+.thought-chain-text {
+  display: inline-block;
+  white-space: nowrap;
+  animation: thought-fade-in 0.3s ease-out;
+}
+
+@keyframes thought-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
