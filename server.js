@@ -510,6 +510,44 @@ app.get("/api/ai/ollama-models", async (req, res) => {
 });
 
 // ============================================
+// API: 通用 AI 聊天接口（供前端直接调用 AI）
+// ============================================
+
+app.post("/api/ai/chat", async (req, res) => {
+  try {
+    const { messages } = req.body || {};
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "messages 参数无效：需要一个非空的消息数组"
+      });
+    }
+
+    logStep("[AI Chat] 收到聊天请求", { messageCount: messages.length });
+
+    // 调用 aiService.callAI (底层会根据当前配置选择 mock/ollama/kimi)
+    const content = await aiService.callAI(messages, {
+      temperature: 0.3,
+      max_tokens: 4096,
+    });
+
+    logStep("[AI Chat] AI 回复成功", { contentLength: content?.length });
+
+    res.json({
+      success: true,
+      data: { content }
+    });
+  } catch (error) {
+    logStep("[AI Chat] 调用失败", { error: String(error) });
+    res.status(500).json({
+      success: false,
+      error: error.message || String(error)
+    });
+  }
+});
+
+// ============================================
 // API: 文件解析状态
 // ============================================
 

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import ThinkingOverlay from './ThinkingOverlay';
+
+import { getDocText } from './data/documentModel';
 
 // ============================================
 // Helper: Highlighter Component (Multi-match support)
 // ============================================
-const Highlighter = ({ text, blockId, comments = [], activeId }) => {
+const Highlighter = ({ text, blockId, comments = [], activeCommentId, onElementClick }) => {
     if (!text) return null;
 
     // 1. Find all relevant quotes for this block
@@ -17,8 +18,8 @@ const Highlighter = ({ text, blockId, comments = [], activeId }) => {
 
             // Debug active state matching
             // Check against both ID and targetId for flexibility
-            const isTargetMatch = c.targetId && c.targetId === activeId;
-            const isIdMatch = c.id === activeId;
+            const isTargetMatch = c.targetId && c.targetId === activeCommentId;
+            const isIdMatch = c.id === activeCommentId;
             const isActive = isIdMatch || isTargetMatch;
 
             // Find all instances of the quote in the text
@@ -78,10 +79,11 @@ const Highlighter = ({ text, blockId, comments = [], activeId }) => {
             <span
                 key={`match-${match.start}`}
                 style={style}
+                className="hover:brightness-90 active:brightness-75"
                 onClick={(e) => {
                     e.stopPropagation();
-                    // Scroll to comment handled by parent? 
-                    // Or just visual indication.
+                    console.log('🖱️ [Highlighter] Clicked blockId:', blockId);
+                    onElementClick?.(blockId);
                 }}
             >
                 {text.slice(match.start, match.end)}
@@ -104,7 +106,7 @@ const Highlighter = ({ text, blockId, comments = [], activeId }) => {
 // ============================================
 // Main Component: MockSplitView
 // ============================================
-const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActive, isLegacyMode, isThinking, isReviewing, comments = [] }) => {
+const MockSplitView = ({ activeCommentId, activeUiId, onSelectElement, onTextSelect, isFallbackActive, isLegacyMode, isThinking, isReviewing, comments = [] }) => {
 
     // --- Selection Handler ---
     const handleMouseUp = useCallback((e) => {
@@ -153,15 +155,14 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
 
     return (
         <div
-            className="flex flex-col h-full w-full bg-[#1e1e1e] text-white font-sans overflow-hidden relative"
+            className="flex flex-col h-full w-full bg-transparent text-white font-sans overflow-hidden relative gap-4"
             onMouseUp={handleMouseUp} // Global capture within this view
         >
-            {/* The Thinking Overlay - Syncs with isReviewing */}
-            <ThinkingOverlay isVisible={isReviewing || isThinking} />
+
 
 
             {/* Top Panel: Prototype */}
-            <div style={{ height: '40%' }} className="overflow-y-auto border-b-2 border-[#333] relative">
+            <div className="h-[40%] overflow-y-auto bg-[#1e1e1e] relative shrink-0 rounded-xl overflow-hidden">
                 <style>{`
                     .demo-container { background: #1e1e1e; color: white; padding: 20px; font-family: sans-serif; height: 100%; box-sizing: border-box; font-size: 14px !important; }
                     .demo-container * { font-size: inherit; }
@@ -184,14 +185,14 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                     </div>
                     <div className="pricing-grid">
                         <div
-                            className="card"
-                            id="ui-price-card" // Keep legacy ID for UI click
-                            style={activeId === 'ui-price-card' ? { ...uiHighlightStyle } : {}}
-                            onClick={() => onSelectElement && onSelectElement('ui-price-card', 'SAAS 团队版')}
+                            className="card cursor-pointer"
+                            id="ui-price-card"
+                            style={activeUiId === 'ui-price-card' ? { ...uiHighlightStyle } : {}}
+                            onClick={(e) => { e.stopPropagation(); onSelectElement?.('ui-price-card'); }}
                         >
                             <h3 id="block-card-team-title">SAAS 团队版</h3>
                             <div className="price" id="block-card-team-price">
-                                <Highlighter text="25积分" blockId="block-card-team-price" comments={comments} activeId={activeId} />
+                                <Highlighter text="25积分" blockId="block-card-team-price" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
                                 <span className="price-suffix">/次</span>
                             </div>
                             <div style={{ margin: '10px 0' }}>
@@ -202,17 +203,17 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                         <div className="card" style={{ borderColor: '#3b82f6' }}>
                             <h3 id="block-card-ent-title">SAAS 企业版 (推荐)</h3>
                             <div className="price" id="block-card-ent-price">
-                                <Highlighter text="50积分" blockId="block-card-ent-price" comments={comments} activeId={activeId} />
+                                <Highlighter text="50积分" blockId="block-card-ent-price" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
                                 <span className="price-suffix">/次</span>
                             </div>
                             <div style={{ margin: '10px 0' }}>
                                 <span className="tag">UI生成</span> <span className="tag">私有化部署</span>
                             </div>
                             <button
-                                className="btn"
+                                className="btn cursor-pointer"
                                 id="ui-upgrade-btn"
-                                onClick={() => onSelectElement && onSelectElement('ui-upgrade-btn', 'SAAS 企业版')}
-                                style={activeId === 'ui-upgrade-btn' ? { ...uiHighlightStyle } : {}}
+                                onClick={(e) => { e.stopPropagation(); onSelectElement?.('ui-upgrade-btn'); }}
+                                style={activeUiId === 'ui-upgrade-btn' ? { ...uiHighlightStyle } : {}}
                             >
                                 立即升级
                             </button>
@@ -222,22 +223,23 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
             </div>
 
             {/* Bottom Panel: Document with Semantic Blocks */}
-            <div style={{ height: '60%' }} className="overflow-y-auto p-6 bg-[#09090b]">
+            <div className="flex-1 overflow-y-auto p-6 bg-[#09090b] rounded-xl overflow-hidden">
                 <div className="max-w-3xl mx-auto text-[#d4d4d8] text-sm leading-relaxed space-y-6">
                     <h1 id="block-doc-title" className="text-xl font-bold text-white mb-6 border-b border-[#27272a] pb-4">
-                        <Highlighter text="关于 AI 企业积分对白名单客户收费调整的公告" blockId="block-doc-title" comments={comments} activeId={activeId} />
+                        <Highlighter text={getDocText("block-doc-title")} blockId="block-doc-title" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
                     </h1>
 
                     <div className="space-y-4">
                         <p id="block-doc-intro-1">
-                            <Highlighter text="尊敬的 MasterGo AI 用户，您好！" blockId="block-doc-intro-1" comments={comments} activeId={activeId} />
+                            <Highlighter text={getDocText("block-doc-intro-1")} blockId="block-doc-intro-1" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
                         </p>
                         <p id="block-doc-intro-2">
                             <Highlighter
-                                text="非常感谢您一直以来对我们服务的信任与支持。随着 AI 技术的不断提升，为了持续为您提供更优质、稳定且富有创新性的 AI 快搭和 AI 设计助手应用服务，我们将对 AI 企业积分收费策略由免费试用正式进入付费商用。"
+                                text={getDocText("block-doc-intro-2")}
                                 blockId="block-doc-intro-2"
                                 comments={comments}
-                                activeId={activeId}
+                                activeCommentId={activeCommentId}
+                                onElementClick={onSelectElement}
                             />
                         </p>
                     </div>
@@ -246,10 +248,11 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                         <h2 id="block-section-1-title" className="text-lg font-semibold text-white mt-4">一、调整原因</h2>
                         <p id="block-section-1-text" className="text-[#a1a1aa]">
                             <Highlighter
-                                text="为了进一步加大在 AI 快搭和 AI 设计助手技术研发上的投入，提升输出物的准确性、优化模型的性能，确保您能获得行业领先的 AI 服务体验。经过全面评估与慎重考虑，我们决定对白名单客户的 AI 企业积分收费进行调整。"
+                                text={getDocText("block-section-1-text")}
                                 blockId="block-section-1-text"
                                 comments={comments}
-                                activeId={activeId}
+                                activeCommentId={activeCommentId}
+                                onElementClick={onSelectElement}
                             />
                         </p>
                     </div>
@@ -258,10 +261,11 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                         <h2 id="block-section-2-title" className="text-lg font-semibold text-white mt-4">二、调整内容</h2>
                         <p id="block-section-2-intro">
                             <Highlighter
-                                text="自 2026 年 2 月 26 日起，AI 企业积分将正式从免费试用模式转变为基于应用场景的收费模式，具体收费规则如下："
+                                text={getDocText("block-section-2-intro")}
                                 blockId="block-section-2-intro"
                                 comments={comments}
-                                activeId={activeId}
+                                activeCommentId={activeCommentId}
+                                onElementClick={onSelectElement}
                             />
                         </p>
 
@@ -292,7 +296,7 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                                             <td className="py-2">性能优化</td>
                                             <td className="py-2" colSpan="2">
                                                 <span id="block-rule-perf-val">
-                                                    <Highlighter text="0分/次 | 0分/次" blockId="block-rule-perf-val" comments={comments} activeId={activeId} />
+                                                    <Highlighter text={getDocText("block-rule-perf-val")} blockId="block-rule-perf-val" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
                                                 </span>
                                             </td>
                                         </tr>
@@ -309,10 +313,11 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                                 <strong className="text-white">免费缓冲期</strong>：
                                 <span id="block-section-3-item-1">
                                     <Highlighter
-                                        text="在 2026 年 1 月 26 日至 2026 年 2 月 25 日期间，您仍可免费使用 AI 快搭和 AI 设计助手。"
+                                        text={getDocText("block-section-3-item-1")}
                                         blockId="block-section-3-item-1"
                                         comments={comments}
-                                        activeId={activeId}
+                                        activeCommentId={activeCommentId}
+                                        onElementClick={onSelectElement}
                                     />
                                 </span>
                             </li>
@@ -320,10 +325,11 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                                 <strong className="text-white">历史积分保护</strong>：
                                 <span id="block-section-3-item-2">
                                     <Highlighter
-                                        text="对于在调整生效前已购买且尚未使用完的 AI 积分，不影响您的正常使用。"
+                                        text={getDocText("block-section-3-item-2")}
                                         blockId="block-section-3-item-2"
                                         comments={comments}
-                                        activeId={activeId}
+                                        activeCommentId={activeCommentId}
+                                        onElementClick={onSelectElement}
                                     />
                                 </span>
                             </li>
@@ -334,10 +340,11 @@ const MockSplitView = ({ activeId, onSelectElement, onTextSelect, isFallbackActi
                         <h2 id="block-section-4-title" className="text-lg font-semibold text-white mt-4">四、如何获取积分</h2>
                         <p id="block-section-4-text">
                             <Highlighter
-                                text="若您希望持续使用 AI 快搭和 AI 设计助手产品，可购买 AI 企业积分套餐。具体信息，您可以联系客户经理，获取专属折扣优惠。"
+                                text={getDocText("block-section-4-text")}
                                 blockId="block-section-4-text"
                                 comments={comments}
-                                activeId={activeId}
+                                activeCommentId={activeCommentId}
+                                onElementClick={onSelectElement}
                             />
                         </p>
                     </div>

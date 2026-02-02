@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import AiChatDashboard from './AiChatDashboard';
 import AiChatDashboardV2 from './AiChatDashboardV2';
+import DualRoleView from './experiments/DualRoleView';
 import UiTabs from './components/UiTabs';
 
 export default function UnifiedChatEntry() {
@@ -17,6 +18,7 @@ export default function UnifiedChatEntry() {
                     onChange={setVersion}
                     tabs={[
                         { key: 'v2', label: '🚀 Feishu Experience (New)' },
+                        { key: 'dual', label: '🧪 Dual Role Sandbox' },
                         { key: 'v1', label: '📦 Legacy Backup (Old)' },
                     ]}
                 />
@@ -26,6 +28,8 @@ export default function UnifiedChatEntry() {
                 {/* Use key to force remount when switching to clear state */}
                 {version === 'v2' ? (
                     <AiChatDashboardV2 key="v2" />
+                ) : version === 'dual' ? (
+                    <DualRoleView key="dual" />
                 ) : (
                     <AiChatDashboard key="v1" />
                 )}

@@ -56,7 +56,17 @@ function App({ isEmbedded = false }) {
   })
   // 已保存的模型配置（用于比较是否有变化）
   const [savedModelConfig, setSavedModelConfig] = useState(null)
-  const [availableModels, setAvailableModels] = useState({ ollama: [], kimi: [] })
+  // 默认可用模型列表（当 API 请求失败时使用）
+  const [availableModels, setAvailableModels] = useState({
+    ollama: [
+      { value: 'qwen3-vl:8b', label: 'Qwen3-VL 8B (多模态)' },
+    ],
+    kimi: [
+      { value: 'moonshot-v1-8k', label: 'Moonshot 8K' },
+      { value: 'moonshot-v1-32k', label: 'Moonshot 32K' },
+      { value: 'moonshot-v1-128k', label: 'Moonshot 128K' },
+    ],
+  })
   const [installedOllamaModels, setInstalledOllamaModels] = useState([])
   const [isLoadingModels, setIsLoadingModels] = useState(false)
   const [isUnloading, setIsUnloading] = useState(false)
@@ -394,8 +404,8 @@ function App({ isEmbedded = false }) {
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top duration-300">
           <div
             className={`rounded-lg border px-4 py-3 shadow-lg ${toast.type === 'error'
-                ? 'border-red-200 bg-red-50 text-red-900'
-                : 'border-green-200 bg-green-50 text-green-900'
+              ? 'border-red-200 bg-red-50 text-red-900'
+              : 'border-green-200 bg-green-50 text-green-900'
               }`}
           >
             <div className="flex items-center gap-2">
@@ -450,12 +460,12 @@ function App({ isEmbedded = false }) {
             <button
               onClick={() => setActiveTab('project')}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'project'
-                  ? isEmbedded
-                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
-                    : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
-                  : isEmbedded
-                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
-                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
+                ? isEmbedded
+                  ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
+                  : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
+                : isEmbedded
+                  ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
+                  : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
                 }`}
             >
               <Settings className="h-4 w-4" />
@@ -464,12 +474,12 @@ function App({ isEmbedded = false }) {
             <button
               onClick={() => setActiveTab('ai')}
               className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'ai'
-                  ? isEmbedded
-                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
-                    : 'bg-white text-primary border-b-2 border-primary'
-                  : isEmbedded
-                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? isEmbedded
+                  ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
+                  : 'bg-white text-primary border-b-2 border-primary'
+                : isEmbedded
+                  ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                  : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                 }`}
             >
               <Brain className="h-4 w-4" />
@@ -495,8 +505,8 @@ function App({ isEmbedded = false }) {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isLocked}
                     className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                        ? 'border-[#27272a] bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a]'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      ? 'border-[#27272a] bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a]'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                       }`}
                   >
                     <Upload className="h-4 w-4" />
@@ -549,8 +559,8 @@ function App({ isEmbedded = false }) {
                             onClick={() => !isLocked && handleModelConfigChange('provider', opt.value)}
                             disabled={isLocked}
                             className={`flex-1 px-3 py-2 text-xs font-medium transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${modelConfig.provider === opt.value
-                                ? 'bg-[#10b981]/20 text-[#10b981]'
-                                : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                              ? 'bg-[#10b981]/20 text-[#10b981]'
+                              : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
                               } disabled:opacity-50 disabled:cursor-not-allowed border-r border-[#27272a] last:border-r-0`}
                           >
                             <span>{opt.label}</span>
@@ -587,8 +597,8 @@ function App({ isEmbedded = false }) {
                             onChange={(e) => handleModelConfigChange('ollama.model', e.target.value)}
                             disabled={isLocked}
                             className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                                ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                                : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
+                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
+                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
                               }`}
                           >
                             <optgroup label="推荐模型">
@@ -651,8 +661,8 @@ function App({ isEmbedded = false }) {
                             placeholder="sk-..."
                             disabled={isLocked}
                             className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                                ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                                : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
+                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
+                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
                               }`}
                           />
                         </div>
@@ -667,8 +677,8 @@ function App({ isEmbedded = false }) {
                             onChange={(e) => handleModelConfigChange('kimi.model', e.target.value)}
                             disabled={isLocked}
                             className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                                ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                                : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
+                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
+                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
                               }`}
                           >
                             {availableModels.kimi?.map((m) => (
@@ -698,12 +708,12 @@ function App({ isEmbedded = false }) {
                       onClick={saveModelConfig}
                       disabled={isSavingModel || isLocked || !isModelConfigChanged()}
                       className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                          ? isModelConfigChanged()
-                            ? 'bg-[#10b981] text-white hover:bg-[#059669]'
-                            : 'bg-[#27272a] text-[#71717a]'
-                          : isModelConfigChanged()
-                            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                            : 'bg-slate-200 text-slate-500'
+                        ? isModelConfigChanged()
+                          ? 'bg-[#10b981] text-white hover:bg-[#059669]'
+                          : 'bg-[#27272a] text-[#71717a]'
+                        : isModelConfigChanged()
+                          ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                          : 'bg-slate-200 text-slate-500'
                         }`}
                     >
                       {isSavingModel ? (
@@ -740,8 +750,8 @@ function App({ isEmbedded = false }) {
                     onClick={() => !isLocked && setActiveConfigRole('client')}
                     disabled={isLocked}
                     className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'client'
-                        ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-400 shadow-sm'
-                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-400 shadow-sm'
+                      : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     <span className="text-lg">🔴</span>
@@ -752,8 +762,8 @@ function App({ isEmbedded = false }) {
                     onClick={() => !isLocked && setActiveConfigRole('vendor')}
                     disabled={isLocked}
                     className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'vendor'
-                        ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-blue-400 shadow-sm'
-                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-blue-400 shadow-sm'
+                      : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     <span className="text-lg">🔵</span>
@@ -764,8 +774,8 @@ function App({ isEmbedded = false }) {
 
                 {/* 角色描述 */}
                 <div className={`px-4 py-3 rounded-xl border ${activeConfigRole === 'client'
-                    ? 'border-red-500/20 bg-red-500/5'
-                    : 'border-blue-500/20 bg-blue-500/5'
+                  ? 'border-red-500/20 bg-red-500/5'
+                  : 'border-blue-500/20 bg-blue-500/5'
                   }`}>
                   <p className="text-xs text-[#a1a1aa]">
                     {activeConfigRole === 'client'
@@ -892,8 +902,8 @@ function App({ isEmbedded = false }) {
             onClick={handleSavePersona}
             disabled={isSavingPersona || isLocked}
             className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mt-6 ${isEmbedded
-                ? 'bg-gradient-to-r from-[#165dff] to-[#1e6fff] text-white hover:shadow-lg hover:shadow-[#165dff]/25'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              ? 'bg-gradient-to-r from-[#165dff] to-[#1e6fff] text-white hover:shadow-lg hover:shadow-[#165dff]/25'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'
               }`}
           >
             {isSavingPersona ? (
