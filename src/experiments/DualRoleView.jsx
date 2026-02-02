@@ -429,9 +429,16 @@ export default function DualRoleView() {
                 const strategyPrompt = STRATEGIES[strategyKey] || STRATEGIES[DEFAULT_STRATEGY];
                 const stylePrompt = STYLES[styleKey] || STYLES[DEFAULT_STYLE];
 
+                // Extract PRD Context
+                const documentText = DOCUMENT_CONTENT.map(b => b.text).join('\n\n');
+
                 const systemPrompt = `
 Role: 乙方项目经理 (Vendor Project Manager).
 Current Task: Reply to a Client's comment on a PRD document.
+
+=== PRD Document Context (Know this well) ===
+${documentText}
+=== End Context ===
 
 Your Personality/Strategy:
 ${strategyPrompt}
@@ -439,10 +446,30 @@ ${strategyPrompt}
 Output Style Constraint:
 ${stylePrompt}
 
-Context: You are replying to the specific comment provided by the user. Do not hallucinate external context.
-Reply in Chinese (Simplified).
+Reply Instructions:
+1. You MUST read the "Client Quoted Text" to understand specific context.
+2. Address the Client's concern specifically based on the PRD logic.
+3. Be professional but defend your product logic if it makes sense, or offer a solution if it's a valid bug.
+4. Reply in Chinese (Simplified).
+5. **CRITICAL: Keep it short.** Max 3 sentences. No long explanations.
+6. **Chat Style ONLY.** Do NOT use email format. NO "Dear Client", NO "Best Regards", NO "[Your Name]" placeholders. Just the answer.
 `;
-                const userContext = `Client (${comment.user}) said: "${comment.content}"`;
+
+                // Construct detailed user context
+                const quotedText = comment.anchor && comment.anchor.quote
+                    ? comment.anchor.quote
+                    : "(No specific text quoted, referring to general document)";
+
+                const userContext = `
+[Client Info]
+Name: ${comment.user}
+
+[Client Quoted Text]
+"${quotedText}"
+
+[Client Comment]
+"${comment.content}"
+`;
 
                 const messages = [
                     { role: "system", content: systemPrompt },
@@ -825,16 +852,7 @@ Reply in Chinese (Simplified).
                         </span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Thinking Item Integration */}
-                        {thinkingMessage && (
-                            <div className="p-3 bg-zinc-800 rounded-lg animate-pulse">
-                                <ThinkingAccordion
-                                    loading={true}
-                                    thoughts={MOCK_THOUGHTS}
-                                    duration={4000}
-                                />
-                            </div>
-                        )}
+
 
                         {comments.map(c => (
                             <CommentCard

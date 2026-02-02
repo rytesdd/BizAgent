@@ -9,6 +9,7 @@ import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } f
 import { Bubble, Sender, ThoughtChain } from '@ant-design/x';
 import { ConfigProvider, theme } from 'antd';
 import { sendMessageToKimi } from '../services/kimiService';
+import { DOCUMENT_CONTENT } from '../data/documentModel';
 
 // ==========================================
 // AI Avatar Component
@@ -112,41 +113,62 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview }, ref) => {
         setMessages(prev => [...prev, initialAiMessage]);
 
         try {
-            let systemInstruction = `你是一个专业的 AI 助手，正在帮助用户进行文档审查和项目协作。请用简洁、专业的语言回答问题。回复使用中文。`;
-            let userPrompt = content ? content.trim() : "你好";
+            // Extract raw text from DOCUMENT_CONTENT for the AI to read (Available for both modes)
+            const documentText = DOCUMENT_CONTENT.map(b => b.text).join('\n\n');
 
-            // Special Logic for Auto Review
-            if (isAutoReview) {
-                systemInstruction = `You are a Senior Product Auditor. Your job is to critique the PRD document provided.
+            // Common specialized review instructions (Reused)
+            const reviewInstructions = `
+** 审查能力定义 **
+当用户要求"审查"、"检查"、"找漏洞"或"分析"文档时，你必须变身为高级产品经理专家。
+在此模式下，不要闲聊，直接分析文档并输出 strict JSON Array。
 
-**Phase 1: Deep Analysis (The Thinking Process)**
-First, analyze the document step-by-step inside <think> tags.
-- Check for logical contradictions in the "Rules" section.
-- Identify ambiguous terms (e.g., "Time TBD").
-- Simulate a user scenario to see if the flow breaks.
-- Use a professional, critical internal monologue.
-
-**Phase 2: Final Output (The Data)**
-After the analysis, output the specific comments in a STRICT JSON Array block.
-
-**Format Example:**
-<think>
-Checking the point deduction rule... wait, "0 points" effectively means the feature is free. This contradicts the "Paid" label. I should flag this.
-Also, the date format is non-standard.
-</think>
-
+** JSON 格式要求 (必须严格遵守) **
 \`\`\`json
 [
-  { "quote": "0 points", "message": "Logic error: 0 points implies free tier..." },
-  ...
+  { 
+    "quote": "原文中的具体句子，必须与文档内容一字不差，以便我进行高亮定位", 
+    "message": "你指出的问题描述，请用专业、犀利的口吻，指出逻辑漏洞或风险" 
+  }
 ]
 \`\`\`
-`;
-                // In a real app, you would inject the actual document content here.
-                // For this sandbox, we'll assume the AI has "read" it or we pass a snippet.
-                userPrompt = `请开始审查。`;
-            }
+** 注意事项：**
+1. "quote" 字段必须严格复制文档原句，**不要**自己概括，否则高亮会失败。
+2. 涉及审查时，只输出 JSON 数组。`;
 
+            let systemInstruction = "";
+            let userPrompt = content ? content.trim() : "你好";
+
+            // Special Logic for Auto Review (Button Trigger)
+            if (isAutoReview) {
+                systemInstruction = `你是一位在大厂工作多年的高级产品经理专家（Senior Product Reviewer）。你的任务是严格审查用户提供的 PRD 文档。
+
+** 第一阶段：深度思考 (Thinking Process) **
+首先，请在 <think> 标签内进行一步步的深度思考和推演。
+- 仔细阅读文档的每一句话，寻找逻辑漏洞、含糊不清的定义（如 "待定"、"TBD"）。
+- 检查规则是否存在自相矛盾的地方（例如："付费功能" 却 "消耗 0 积分"）。
+- 模拟用户使用场景，推演流程是否能跑通。
+- 保持批判性思维，像一位严格的面试官一样审视文档。
+
+** 第二阶段：输出结果 (Final Output) **
+思考结束后，请将发现的问题整理成一个严格的 JSON 数组格式返回。
+${reviewInstructions}`;
+
+                userPrompt = `请审查以下 PRD 文档内容：\n\n=== 文档开始 ===\n${documentText}\n=== 文档结束 ===\n\n请输出审查结果。`;
+            } else {
+                // NORMAL CHAT MODE (With Intent Recognition)
+                systemInstruction = `你是一个专业的 AI 助手，正在帮助用户进行文档审查和项目协作。
+你的知识库中已经包含了当前 PRD 文档的内容。
+
+=== 当前 PRD 文档内容 ===
+${documentText}
+=== 文档结束 ===
+
+${reviewInstructions}
+
+** 交互策略 **
+1. 如果用户只是进行日常提问或闲聊（例如"你好"、"文档里讲了什么"），请用自然语言回答，**不要**输出 JSON。
+2. 如果用户明确要求进行"审查"、"挑刺"、"找问题"（例如"看看文档有什么问题"、"检查计费规则"），请立即执行审查逻辑，并**必须**输出上述 JSON 格式。`;
+            }
             // Build conversation history for context
             const conversationHistory = [
                 {
@@ -165,14 +187,67 @@ Also, the date format is non-standard.
                 { role: 'user', content: userPrompt }
             ];
 
+            // Start Fake Streaming for Thinking Process
+            let thoughtAccumulator = "";
+
+            // Define two types of logs
+            const AUTO_REVIEW_LOG = `正在初始化文档分析引擎...
+加载 PRD 上下文数据 (12KB)... 完成
+正在构建语义依赖图谱...
+[Phase 1] 逻辑一致性自检
+- 扫描 "计费规则" 模块... 发现潜在冲突：积分扣除规则设定为 0，这与付费属性矛盾。
+- 扫描 "时间格式" ... 发现非标准定义 "TBD"，建议标准化。
+[Phase 2] 用户路径模拟
+- 模拟新用户注册 -> 付费转化流程...
+- 正在校验边界条件：余额不足时的扣费行为...
+[Phase 3] 生成审查报告
+- 提取关键引用 (Quotes)...
+- 格式化 JSON 输出...
+- 最终校验中...`;
+
+            const GENERAL_LOG = `正在接收用户指令...
+加载上下文环境...
+正在理解意图...
+检索相关知识库...
+构建回答逻辑...
+正在组织语言...`;
+
+            // Choose log based on mode
+            const TARGET_LOG = isAutoReview ? AUTO_REVIEW_LOG : GENERAL_LOG;
+
+            const typingInterval = setInterval(() => {
+                if (thoughtAccumulator.length < TARGET_LOG.length) {
+                    // Add 1-3 chars at a time for realistic typing feel
+                    const nextChunk = TARGET_LOG.slice(thoughtAccumulator.length, thoughtAccumulator.length + Math.floor(Math.random() * 3) + 1);
+                    thoughtAccumulator += nextChunk;
+
+                    setMessages(prev => prev.map(msg =>
+                        msg.key === aiMessageId
+                            ? { ...msg, thoughtContent: thoughtAccumulator }
+                            : msg
+                    ));
+                }
+            }, 50); // Speed of typing
+
             const response = await sendMessageToKimi(conversationHistory);
+
+            // API Finished: Clear typing interval
+            clearInterval(typingInterval);
+
             const rawText = response.trim();
 
             console.log("[AiAssistant] Raw Response:", rawText);
 
             // 1. Extract Thought (Regex to find content between <think> tags)
             const thinkMatch = rawText.match(/<think>([\s\S]*?)<\/think>/i);
-            const thoughtProcess = thinkMatch ? thinkMatch[1].trim() : "";
+            // If real think content exists, append it to our mock log for richness, or just replace it.
+            // For better UX, let's keep our "Mock Log" as the visual "process", and maybe append the real final summary if distinct.
+            // But since we want to "stop" the chain when comments appear, we just finalize it here.
+
+            // To make it look "finished", ensure we show the user we are done thinking.
+            const finalThoughtDisplay = thoughtAccumulator + "\n[系统] 分析完成，生成报告如下。";
+
+            const thoughtProcess = thinkMatch ? thinkMatch[1].trim() : finalThoughtDisplay;
 
             // 2. Extract JSON (Regex to find content between ```json blocks or simple brackets)
             // Remove the thought part to isolate the 'content' part
@@ -190,36 +265,41 @@ Also, the date format is non-standard.
                     console.log("[AiAssistant] Parsed JSON Comments:", finalComments.length);
 
                     // Optional: If we successfully parsed JSON, maybe we only want to show a summary in the bubble?
-                    // For now, let's keep the mainContent as the text to display, 
-                    // or if it's ONLY JSON, maybe pretty print it or just say "Analysis Complete".
-                    if (isAutoReview) {
-                        mainContent = `审查完成，发现 ${finalComments.length} 个潜在问题。`;
-                        // Trigger parent callback
-                        if (onTriggerAiReview && typeof onTriggerAiReview === 'function') {
-                            // We are hijacking this prop for now, ideally should use a different one 'onReviewComplete'
-                            // But based on current setup, the parent passed 'handleAiReview' which expects nothing or specific args?
-                            // Wait, the parent 'handleAiReview' in DualRoleView currently does EVERYTHING (api call, etc).
-                            // We are moving logic HERE. So we need a way to pass data BACK.
-                            // The user plan said: "Call onReviewComplete(jsonData) to pass highlights".
-                            // I need to add that prop or check if onTriggerAiReview can be used? 
-                            // Actually, onTriggerAiReview was passed as `handleAiReview` which triggers the OLD logic.
-                            // We need new logic. I should probalby assume the user *wants* us to use a new prop or event.
-                            // But I can't change the parent *too* much until Phase 3 integration. 
-                            // Let's just log for now and assume part of Phase 3 execution will wire this up.
-                        }
-                    }
+                    // Generate a dynamic summary based on the content of comments
+                    const generateReviewSummary = (comments) => {
+                        const tags = new Set();
+                        const fullText = comments.map(c => c.message).join(' ');
+
+                        // Simple Keyword Matching
+                        if (/定价|积分|费用|钱|收费|价格/.test(fullText)) tags.add("定价策略");
+                        if (/合规|法律|风险|法务/.test(fullText)) tags.add("合规风险");
+                        if (/逻辑|矛盾|冲突|错误/.test(fullText)) tags.add("逻辑漏洞");
+                        if (/格式|标点|日期|排版|错别字/.test(fullText)) tags.add("规范性");
+                        if (/模糊|歧义|不明确|未说明/.test(fullText)) tags.add("表述清晰度");
+
+                        const tagArray = Array.from(tags);
+                        const focusArea = tagArray.length > 0
+                            ? `发现在 **${tagArray.slice(0, 2).join('、')}** 等方面存在问题`
+                            : "发现若干细节有待优化";
+
+                        return `本次审查${focusArea}，共定位到 ${comments.length} 个潜在风险点，详情请查看右侧列表。`;
+                    };
+
+                    // Apply summary to BOTH Auto-Review (Button) and Intent-Based Review (Chat)
+                    mainContent = generateReviewSummary(finalComments);
+
                 } catch (e) {
                     console.error("JSON Parse failed", e);
                 }
             }
 
-            // 3. Update UI State
+            // 3. Update UI State (Finalize)
             setMessages(prev => prev.map(msg =>
                 msg.key === aiMessageId
                     ? {
                         ...msg,
                         isThinking: false,
-                        thoughtContent: thoughtProcess,
+                        thoughtContent: finalThoughtDisplay, // Show the full mock log + finished status
                         content: mainContent,
                         originalRawContent: rawText // Keep raw for history
                     }
@@ -227,7 +307,7 @@ Also, the date format is non-standard.
             ));
 
             // 4. Pass Data to Parent (Phase 3 will finalize this)
-            if (finalComments.length > 0 && typeof onTriggerAiReview === 'function' && onTriggerAiReview.name === 'handleReviewComplete') {
+            if (finalComments.length > 0 && typeof onTriggerAiReview === 'function') {
                 // Forward compatibility hook
                 onTriggerAiReview(finalComments);
             }
@@ -461,3 +541,6 @@ Also, the date format is non-standard.
         </ConfigProvider>
     );
 }
+);
+
+export default AiAssistantSidebar;
