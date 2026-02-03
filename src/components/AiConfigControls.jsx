@@ -67,6 +67,7 @@ export function ConfigSlider({
           '--slider-thumb-color': trackColor,
           '--slider-glow': glowColor,
           '--slider-glow-hover': glowHover,
+          background: `linear-gradient(to right, ${trackColor} 0%, ${trackColor} ${(value - min) / (max - min) * 100}%, #27272a ${(value - min) / (max - min) * 100}%, #27272a 100%)`
         }}
         className="w-full h-2 bg-[#27272a] rounded-lg appearance-none cursor-pointer
           [&::-webkit-slider-thumb]:appearance-none
@@ -83,9 +84,6 @@ export function ConfigSlider({
           [&::-moz-range-thumb]:border-0
           [&::-moz-range-thumb]:cursor-pointer
           disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{
-          background: `linear-gradient(to right, ${trackColor} 0%, ${trackColor} ${((value - min) / (max - min)) * 100}%, #27272a ${((value - min) / (max - min)) * 100}%, #27272a 100%)`,
-        }}
       />
       {(leftLabel || rightLabel) && (
         <div className="flex justify-between text-xs text-[#71717a]">
@@ -126,8 +124,8 @@ export function ConfigToggle({
             onClick={() => !disabled && onChange(opt.value)}
             disabled={disabled}
             className={`flex-1 px-3 py-2 text-sm transition-all duration-200 ${value === opt.value
-                ? activeClass
-                : 'bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5]'
+              ? activeClass
+              : 'bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a] hover:text-[#f4f4f5]'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {opt.label}
@@ -367,8 +365,8 @@ export function PersonaSelector({ value, onChange, disabled }) {
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
           className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 text-left ${isOpen
-              ? 'border-red-500/50 bg-red-500/5'
-              : 'border-[#27272a] hover:border-[#3f3f46] bg-[#18181b]'
+            ? 'border-red-500/50 bg-red-500/5'
+            : 'border-[#27272a] hover:border-[#3f3f46] bg-[#18181b]'
             } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
           <div className="flex items-center gap-3 min-w-0">
@@ -399,8 +397,8 @@ export function PersonaSelector({ value, onChange, disabled }) {
                   setIsOpen(false);
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${opt.value === value
-                    ? 'bg-red-500/10 border-l-2 border-red-500'
-                    : 'hover:bg-[#27272a] border-l-2 border-transparent'
+                  ? 'bg-red-500/10 border-l-2 border-red-500'
+                  : 'hover:bg-[#27272a] border-l-2 border-transparent'
                   }`}
               >
                 <span className="text-2xl shrink-0">{opt.label.split(' ')[0]}</span>
@@ -435,8 +433,8 @@ export function FeedbackToneControl({ value, onChange, disabled }) {
             onClick={() => !disabled && onChange(opt.value)}
             disabled={disabled}
             className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${value === opt.value
-                ? 'bg-red-500/20 text-red-400 shadow-sm'
-                : 'text-[#71717a] hover:text-[#a1a1aa] hover:bg-[#27272a]'
+              ? 'bg-red-500/20 text-red-400 shadow-sm'
+              : 'text-[#71717a] hover:text-[#a1a1aa] hover:bg-[#27272a]'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <span>{opt.icon}</span>
@@ -458,8 +456,8 @@ export function StrategyCard({ option, isSelected, onClick, disabled }) {
       onClick={onClick}
       disabled={disabled}
       className={`p-4 rounded-xl border-2 transition-all duration-200 text-left group ${isSelected
-          ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
-          : 'border-[#27272a] bg-[#18181b] hover:border-[#3f3f46] hover:bg-[#27272a]'
+        ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
+        : 'border-[#27272a] bg-[#18181b] hover:border-[#3f3f46] hover:bg-[#27272a]'
         } disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       <div className="flex items-start gap-3">
@@ -525,8 +523,8 @@ export function ResponseLengthSelector({ value, onChange, disabled }) {
           <label
             key={opt.value}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${value === opt.value
-                ? 'border-blue-500 bg-blue-500/10'
-                : 'border-[#27272a] bg-[#18181b] hover:border-[#3f3f46]'
+              ? 'border-blue-500 bg-blue-500/10'
+              : 'border-[#27272a] bg-[#18181b] hover:border-[#3f3f46]'
               } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <input
@@ -623,8 +621,8 @@ export function HumanReviewToggle({ checked, onChange, disabled }) {
           onClick={() => !disabled && onChange(!checked)}
           disabled={disabled}
           className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 transition-colors duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed ${checked
-              ? 'bg-amber-500 border-amber-500'
-              : 'bg-[#27272a] border-[#3f3f46]'
+            ? 'bg-amber-500 border-amber-500'
+            : 'bg-[#27272a] border-[#3f3f46]'
             }`}
         >
           <span className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-5' : 'translate-x-0'

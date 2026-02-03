@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import MockSplitView from '../MockSplitView';
 
+
+
+
 import Drawer from '../components/Drawer';
 import AiAssistantSidebar from '../components/AiAssistantSidebar';
 import { IconAI, IconMenu, IconSend } from '../svg-icons';
@@ -8,6 +11,9 @@ import { DOCUMENT_CONTENT } from '../data/documentModel';
 import { sendMessageToKimi } from '../services/kimiService';
 import { eventBus, EVENTS } from '../utils/eventBus';
 import axios from 'axios';
+import AgentProcessCycle from '../components/AgentProcessCycle';
+
+
 
 // ==========================================
 // Trash Icon Component
@@ -22,6 +28,29 @@ function IconTrash({ className }) {
         </svg>
     );
 }
+
+// Helper for Display Names
+// Helper for Display Names
+const getDisplayName = (name) => {
+    const map = {
+        "Client": "甲方",
+        "Party A": "甲方",
+        "Product Manager": "甲方",
+        "Me (PM)": "甲方",
+        "甲方产品经理": "甲方",
+        "我 (甲方)": "甲方",
+        "Vendor": "乙方",
+        "Party B": "乙方",
+        "Vendor Team": "乙方",
+        "Me (Vendor)": "乙方",
+        "乙方团队": "乙方",
+        "我 (乙方)": "乙方",
+        "Vendor Agent": "乙方 AI 智能回复"
+    };
+    if (map[name]) return map[name];
+    if (name && name.startsWith("Me (Vendor")) return "乙方";
+    return name;
+};
 
 // ==========================================
 // CommentCard Component (Reused)
@@ -81,14 +110,14 @@ function CommentCard({ comment, isActive, onClick, onReply, onDelete }) {
             className={`
                 p-3 rounded-lg cursor-pointer transition-all group
                 ${isActive
-                    ? 'bg-yellow-900/10 shadow-[0_0_15px_rgba(234,179,8,0.05)]'
+                    ? 'bg-[#2C2C2C]'
                     : 'bg-[#2C2C2C] hover:bg-[#333333]'
                 }
             `}
         >
             {/* 1. Quote Context (Moved to Top & Transparent) */}
             {comment.anchor?.quote && (
-                <div className="mb-2 text-xs text-zinc-500 bg-transparent border-l-2 border-zinc-700 pl-2 truncate font-mono select-none">
+                <div className={`mb-2 text-xs text-zinc-500 bg-transparent border-l-2 pl-2 truncate font-mono select-none ${isActive ? 'border-[#FFB30F]' : 'border-zinc-700'}`}>
                     "{comment.anchor.quote}"
                 </div>
             )}
@@ -96,16 +125,16 @@ function CommentCard({ comment, isActive, onClick, onReply, onDelete }) {
             {/* 2. User Info & Timestamp (Moved to Second Row) */}
             <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${comment.type?.includes('AI') ? 'bg-purple-500' :
-                        comment.user === 'Vendor Agent' ? 'bg-orange-500' : 'bg-green-500'
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${comment.type?.includes('AI') ? 'bg-[#2B5CD9]' :
+                        (comment.user === 'Vendor Agent' || comment.user === '乙方 AI 智能回复') ? 'bg-orange-500' : 'bg-green-500'
                         }`}></div>
-                    <span className={`font-bold text-sm ${comment.type?.includes('AI') ? 'text-purple-300' :
-                        comment.user === 'Vendor Agent' ? 'text-orange-300' : 'text-zinc-300'
+                    <span className={`font-bold text-sm ${comment.type?.includes('AI') ? 'text-[#aaccff]' :
+                        (comment.user === 'Vendor Agent' || comment.user === '乙方 AI 智能回复') ? 'text-orange-300' : 'text-zinc-300'
                         }`}>
-                        {comment.user}
+                        {getDisplayName(comment.user)}
                     </span>
                     {/* Badge for Bot */}
-                    {comment.user === 'Vendor Agent' && (
+                    {(comment.user === 'Vendor Agent' || comment.user === '乙方 AI 智能回复') && (
                         <span className="text-[9px] bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded">
                             BOT
                         </span>
@@ -137,7 +166,7 @@ function CommentCard({ comment, isActive, onClick, onReply, onDelete }) {
                 <div className="mt-3 space-y-2 bg-[#252525] rounded-md p-2">
                     {comment.replies.map(reply => (
                         <div key={reply.id} className="text-sm leading-snug">
-                            <span className="text-zinc-400 font-medium">{reply.user}:</span>
+                            <span className="text-zinc-400 font-medium">{getDisplayName(reply.user)}:</span>
                             <span className="text-zinc-300 ml-1.5">{reply.content}</span>
                         </div>
                     ))}
@@ -377,14 +406,14 @@ export default function DualRoleView() {
         // Helper: Check if a comment is from Party A (Client)
         const isFromClient = (comment) => {
             // Exclude: Vendor Agent (self)
-            if (comment.user === "Vendor Agent") return false;
+            if (comment.user === "Vendor Agent" || comment.user === "乙方 AI 智能回复") return false;
             // Exclude: AI Reviewer (Purple Badge)
             if (comment.type === "AI_CLIENT") return false;
             if (comment.user === "AI 审查员") return false;
             if (comment.user?.includes("AI Assistant")) return false;
             // Exclude: Vendor Team
-            if (comment.user === "Vendor Team") return false;
-            if (comment.user?.startsWith("Me (Vendor")) return false;
+            if (comment.user === "Vendor Team" || comment.user === "乙方团队") return false;
+            if (comment.user?.startsWith("Me (Vendor") || comment.user?.includes("乙方")) return false;
             // Everything else is considered Party A (Client)
             return true;
         };
@@ -394,8 +423,10 @@ export default function DualRoleView() {
             if (!comment.replies || comment.replies.length === 0) return false;
             return comment.replies.some(r =>
                 r.user === "Vendor Agent" ||
+                r.user === "乙方 AI 智能回复" ||
                 r.user === "Me (Vendor)" ||
-                r.user?.startsWith("Me (Vendor")
+                r.user?.startsWith("Me (Vendor") ||
+                r.user?.includes("乙方")
             );
         };
 
@@ -482,7 +513,7 @@ Name: ${comment.user}
                 // Append reply to the specific comment's replies array
                 const newReply = {
                     id: `agent_reply_${Date.now()}_${comment.id}`,
-                    user: "Vendor Agent",
+                    user: "乙方 AI 智能回复",
                     content: replyContent,
                     created_at: Date.now()
                 };
@@ -507,10 +538,10 @@ Name: ${comment.user}
         const processBatch = async () => {
             for (const comment of pendingComments) {
                 await processComment(comment);
-                // Small delay between API calls to avoid flooding
+                // Small delay between API calls
                 await new Promise(r => setTimeout(r, 800));
             }
-            setIsAgentTyping(false);
+            // setIsAgentTyping(false) is now handled by the UI component's onComplete prop
         };
 
         // Start processing (with initial delay for UX)
@@ -556,7 +587,7 @@ Name: ${comment.user}
 
         const newComment = {
             id: `v2_manual_${Date.now()}`,
-            user: currentRole === 'PARTY_A' ? "Product Manager" : "Vendor Team",
+            user: currentRole === 'PARTY_A' ? "甲方" : "乙方",
             content: inputValue,
             anchor: { blockId: selectedBlockId, quote: selectedText },
             created_at: Date.now(),
@@ -573,12 +604,18 @@ Name: ${comment.user}
         setActiveId(newComment.id);
     };
 
-    // 4. Click Comment
+    // 4. Click Comment (Toggle: click again to deselect)
     const handleCommentClick = (id, blockId) => {
-        setActiveId(id);
-        if (blockId) {
-            const el = document.getElementById(blockId);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (activeId === id) {
+            // Already selected → deselect
+            setActiveId(null);
+        } else {
+            // Select new card
+            setActiveId(id);
+            if (blockId) {
+                const el = document.getElementById(blockId);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
     };
 
@@ -623,7 +660,7 @@ Name: ${comment.user}
     const handleReply = async (parentId, replyContent) => {
         const newReply = {
             id: `reply_${Date.now()}`,
-            user: currentRole === 'PARTY_A' ? "Me (PM)" : "Me (Vendor)",
+            user: currentRole === 'PARTY_A' ? "甲方" : "乙方",
             content: replyContent,
             created_at: Date.now()
         };
@@ -656,7 +693,7 @@ Name: ${comment.user}
 
         const formattedComments = newComments.map((review, index) => ({
             id: `ai_rev_${Date.now()}_${index}`,
-            user: "AI 审查员",
+            user: "甲方虚拟代理",
             content: review.message,
             anchor: {
                 blockId: findBlockIdForQuote(review.quote),
@@ -710,30 +747,31 @@ Name: ${comment.user}
                         <button
                             onClick={() => setCurrentRole('PARTY_A')}
                             className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_A'
-                                ? 'bg-zinc-700 text-white shadow-sm'
+                                ? 'bg-[#3B82F6] text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                         >
-                            Party A (Client)
+                            甲方
                         </button>
                         <button
                             onClick={() => setCurrentRole('PARTY_B')}
                             className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_B'
-                                ? 'bg-indigo-600 text-white shadow-sm'
+                                ? 'bg-[#3B82F6] text-white shadow-sm'
                                 : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                         >
-                            Party B (Vendor)
+                            乙方
                         </button>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* CONDITIONAL ACTION BUTTONS */}
+                    {/* CONDITIONAL ACTION BUTTONS - AI Review 已隐藏，功能可通过语义触发 */}
                     {currentRole === 'PARTY_A' ? (
                         <button
                             onClick={handleAiReviewTrigger}
                             disabled={false} // Always enabled now, Sidebar manages state
+                            style={{ display: 'none' }} // 隐藏按钮，保留代码便于恢复
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all
                                 bg-white text-black hover:bg-zinc-200 shadow-sm
                             `}
@@ -743,14 +781,12 @@ Name: ${comment.user}
                         </button>
                     ) : (
                         // PARTY B: Agent Toggle
-                        <div className="flex items-center gap-3 bg-zinc-800 rounded-full px-3 py-1">
+                        <div className="flex items-center gap-3 bg-zinc-800 rounded-full px-3 py-1 text-xs">
                             {isAgentTyping && (
-                                <span className="text-[10px] text-orange-400 animate-pulse font-mono">
-                                    Agent is typing...
-                                </span>
+                                <AgentProcessCycle onComplete={() => setIsAgentTyping(false)} />
                             )}
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-zinc-400">Auto-Reply Agent</span>
+                                <span className="text-xs text-zinc-400">启用Agent自动回复</span>
                                 <button
                                     onClick={() => setAgentEnabled(!agentEnabled)}
                                     className={`w-8 h-4 rounded-full p-0.5 transition-colors duration-300 ${agentEnabled ? 'bg-green-500' : 'bg-zinc-600'
@@ -782,11 +818,12 @@ Name: ${comment.user}
                 {/* --- Column 1: AI Assistant Sidebar --- */}
                 <AiAssistantSidebar
                     ref={sidebarRef}
+                    currentRole={currentRole}
                     onTriggerAiReview={handleAiAnalysisComplete}
                 />
 
                 {/* --- Column 2: Document/Prototype View --- */}
-                <div className="flex-1 relative overflow-hidden min-w-0 bg-zinc-900 rounded-xl">
+                <div className="flex-1 relative overflow-hidden min-w-0 bg-[#2C2C2C] rounded-xl">
                     <div className="h-full w-full overflow-hidden" ref={scrollContainerRef}>
                         <MockSplitView
                             activeCommentId={activeId}
@@ -841,15 +878,8 @@ Name: ${comment.user}
 
                 {/* --- Column 3: Comment Sidebar --- */}
                 <div className="w-[340px] bg-zinc-900 flex flex-col rounded-xl overflow-hidden">
-                    <div className="h-14 flex items-center px-4 bg-zinc-900/50 justify-between">
-                        <span className="font-medium">Comments ({comments.length})</span>
-                        {/* Role Indicator for Sidebar */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${currentRole === 'PARTY_A'
-                            ? 'bg-zinc-800 text-zinc-400'
-                            : 'bg-indigo-500/20 text-indigo-400'
-                            }`}>
-                            {currentRole === 'PARTY_A' ? 'View: Client' : 'View: Vendor'}
-                        </span>
+                    <div className="h-14 flex items-center px-4 bg-zinc-900/50">
+                        <span className="font-medium">评论 ({comments.length})</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
@@ -868,6 +898,6 @@ Name: ${comment.user}
                 </div>
 
             </div>
-        </div>
+        </div >
     );
 }

@@ -5,10 +5,11 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,  // 允许局域网访问
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3000',
         changeOrigin: true,
       },
     },

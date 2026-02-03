@@ -52,15 +52,27 @@ const ThinkingIndicator = () => (
 // ==========================================
 // Main Component
 // ==========================================
-const AiAssistantSidebar = forwardRef(({ onTriggerAiReview }, ref) => {
-    // --- State ---
-    const [messages, setMessages] = useState([
+const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A' }, ref) => {
+    // --- State: 独立的消息状态（甲方/乙方隔离）---
+    const [clientMessages, setClientMessages] = useState([
         {
-            key: 'welcome',
+            key: 'welcome_client',
             role: 'ai',
-            content: '你好！我是你的 AI 助手。有什么可以帮助你的吗？'
+            content: '你好！我是你的 BizAgent 业务助手。有什么可以帮助你的吗？'
         }
     ]);
+    const [vendorMessages, setVendorMessages] = useState([
+        {
+            key: 'welcome_vendor',
+            role: 'ai',
+            content: '你好！我是你的 BizAgent 业务助手。有什么可以帮助你的吗？'
+        }
+    ]);
+
+    // 根据当前角色动态选择消息状态
+    const messages = currentRole === 'PARTY_A' ? clientMessages : vendorMessages;
+    const setMessages = currentRole === 'PARTY_A' ? setClientMessages : setVendorMessages;
+
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState('');
 
@@ -364,7 +376,7 @@ ${reviewInstructions}
             theme={{
                 algorithm: theme.darkAlgorithm,
                 token: {
-                    colorPrimary: '#8b5cf6', // Violet
+                    colorPrimary: '#4F4F4F', // Dark Grey
                     colorBgContainer: '#27272a',
                     colorBgElevated: '#3f3f46',
                     colorText: '#e4e4e7',
@@ -382,30 +394,27 @@ ${reviewInstructions}
                 }
             }}
         >
-            <div className="w-[380px] h-full flex flex-col bg-zinc-900 rounded-xl overflow-hidden">
+            <div className="w-[380px] h-full flex flex-col bg-zinc-900 rounded-xl overflow-hidden chat-panel-dark">
                 {/* --- Header --- */}
                 <div className="h-14 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="font-semibold text-zinc-100">AI Assistant</span>
+                        <span className="font-semibold text-zinc-100">BizAgent</span>
                     </div>
-                    <span className="text-[10px] px-2 py-1 rounded-full bg-violet-500/20 text-violet-400">
-                        Kimi
-                    </span>
                 </div>
 
                 {/* --- Message List (Scrollable) --- */}
                 <div
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-4 space-y-4 chat-panel-dark"
+                    className="flex-1 overflow-y-auto p-4 space-y-4"
                 >
                     {messages.map((msg) => (
                         <div
                             key={msg.key}
                             className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
                         >
-                            {/* Avatar */}
-                            {msg.role === 'ai' ? <AIAvatar /> : <UserAvatar />}
+                            {/* Avatar - Hide AI Avatar */}
+                            {msg.role === 'ai' ? null : <UserAvatar />}
 
                             {/* Bubble */}
                             <Bubble
@@ -414,8 +423,8 @@ ${reviewInstructions}
                                 styles={{
                                     content: {
                                         maxWidth: '260px',
-                                        background: msg.role === 'user' ? '#3f3f46' : '#27272a',
-                                        border: msg.role === 'user' ? '1px solid #52525b' : '1px solid #3f3f46',
+                                        background: msg.role === 'user' ? '#3f3f46' : 'transparent',
+                                        border: msg.role === 'user' ? '1px solid #52525b' : 'none',
                                         borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                                         padding: '12px 16px',
                                         color: '#e4e4e7',
@@ -433,16 +442,16 @@ ${reviewInstructions}
                     width: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    padding: '10px 10px 20px 10px',
+                    padding: '0 16px 16px 16px', // Adjusted padding: 0 top (flush), 16 side/bottom
                     background: '#101010',
                     boxSizing: 'border-box',
                     flexShrink: 0,
                 }}>
-                    {/* 按钮区域 */}
+                    {/* 按钮区域 - 已隐藏，功能可通过语义触发 */}
                     <div style={{
                         flexShrink: 0,
                         width: '100%',
-                        display: 'flex',
+                        display: 'none', // 隐藏按钮区域，保留代码便于恢复
                         alignItems: 'center',
                         paddingBottom: '10px',
                         boxSizing: 'border-box',
@@ -495,7 +504,7 @@ ${reviewInstructions}
                     </div>
 
                     {/* 输入框容器 - 固定高度100px */}
-                    <div className="w-full px-4 pb-4"> {/* Container padding */}
+                    <div className="w-full"> {/* Removed redundant padding */}
                         <Sender
                             loading={loading}
                             value={inputValue}

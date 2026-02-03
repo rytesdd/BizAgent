@@ -64,12 +64,15 @@ const Highlighter = ({ text, blockId, comments = [], activeCommentId, onElementC
 
         // The Highlighted Segment
         const style = match.isActive ? {
-            backgroundColor: '#fef08a',
-            borderBottom: '2px solid #ca8a04',
+            backgroundColor: '#fbbf24', // Amber 400 - Distinct active state
+            color: '#000000',           // Black text for maximum contrast
+            borderBottom: '2px solid #b45309', // Dark amber border
             transition: 'all 0.2s',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            boxShadow: '0 0 4px rgba(251, 191, 36, 0.5)' // Subtle glow
         } : {
-            backgroundColor: '#fef9c3', // Light yellow for inactive
+            backgroundColor: '#fef08a', // Yellow 200 - Readable highlight
+            color: '#000000',           // Black text for contrast
             borderBottom: '2px solid transparent',
             transition: 'all 0.2s',
             cursor: 'pointer'
@@ -223,7 +226,7 @@ const MockSplitView = ({ activeCommentId, activeUiId, onSelectElement, onTextSel
             </div>
 
             {/* Bottom Panel: Document with Semantic Blocks */}
-            <div className="flex-1 overflow-y-auto p-6 bg-[#09090b] rounded-xl overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 bg-[#101010] rounded-xl overflow-hidden">
                 <div className="max-w-3xl mx-auto text-[#d4d4d8] text-sm leading-relaxed space-y-6">
                     <h1 id="block-doc-title" className="text-xl font-bold text-white mb-6 border-b border-[#27272a] pb-4">
                         <Highlighter text={getDocText("block-doc-title")} blockId="block-doc-title" comments={comments} activeCommentId={activeCommentId} onElementClick={onSelectElement} />
