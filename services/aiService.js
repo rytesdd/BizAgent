@@ -101,9 +101,54 @@ let runtimeConfig = {
   kimi: {
     baseURL: KIMI_DEFAULT_CONFIG.baseURL,
     model: KIMI_DEFAULT_CONFIG.model,
-    apiKey: process.env.KIMI_API_KEY || "",
+    apiKey: "", // 不在运行时配置中存储 Key，使用 getSecureApiKey 获取
   },
 };
+
+// ============================================
+// 安全获取 API Key（环境变量优先）
+// ============================================
+
+/**
+ * 安全获取 Kimi API Key
+ * 
+ * 优先级规则：
+ * 1. process.env.KIMI_API_KEY - 最高优先级，始终优先使用
+ * 2. runtimeConfig.kimi.apiKey - 仅当环境变量未设置时使用
+ * 3. 返回空字符串 - 如果都未配置
+ * 
+ * @returns {string} API Key（可能为空）
+ */
+function getSecureApiKey(provider = "kimi") {
+  if (provider === "kimi") {
+    // 环境变量始终优先
+    const envKey = process.env.KIMI_API_KEY;
+    if (envKey && envKey.trim()) {
+      return envKey.trim();
+    }
+    // 降级到运行时配置（通常不会有值，因为我们不在此存储 Key）
+    const runtimeKey = runtimeConfig.kimi?.apiKey;
+    if (runtimeKey && runtimeKey.trim() && runtimeKey !== "********") {
+      logStep("⚠️ 警告：使用运行时配置中的 API Key，建议改用 .env 文件配置");
+      return runtimeKey.trim();
+    }
+    return "";
+  }
+  // DeepSeek 等其他 Provider 可在此扩展
+  if (provider === "deepseek") {
+    return process.env.DEEPSEEK_API_KEY || "";
+  }
+  return "";
+}
+
+/**
+ * 检查指定 Provider 的 API Key 是否已配置
+ * @param {string} provider - Provider 名称
+ * @returns {boolean} 是否已配置
+ */
+function hasApiKey(provider = "kimi") {
+  return !!getSecureApiKey(provider);
+}
 
 // Mock 回复模板（quoted_text 为 PRD 中被评论的原文片段，用于前端标黄与定位）
 // target_id: Native ID Generation for strict new mode highlighting
@@ -416,11 +461,12 @@ function createClient(provider) {
       });
 
     case AI_PROVIDERS.KIMI:
-      const kimiKey = runtimeConfig.kimi.apiKey || process.env.KIMI_API_KEY;
+      // 使用安全获取函数（环境变量优先）
+      const kimiKey = getSecureApiKey("kimi");
       if (!kimiKey) {
-        throw new Error("缺少 KIMI API Key");
+        throw new Error("缺少 KIMI API Key，请在 .env 文件中设置 KIMI_API_KEY");
       }
-      logStep("使用 Kimi (Moonshot) API", { model: runtimeConfig.kimi.model });
+      logStep("使用 Kimi (Moonshot) API", { model: runtimeConfig.kimi.model, keySource: process.env.KIMI_API_KEY ? "env" : "runtime" });
       return new OpenAI({
         apiKey: kimiKey,
         baseURL: runtimeConfig.kimi.baseURL,
@@ -1098,6 +1144,7 @@ function parseJsonArray(rawText) {
 
 /**
  * 获取当前服务状态
+ * 注意：返回的配置不包含真实 API Key
  */
 function getStatus() {
   const provider = getProvider();
@@ -1109,12 +1156,25 @@ function getStatus() {
     logStep("getStatus: createClient 失败", { error: err.message });
     statusError = err.message || String(err);
   }
+
+  // 获取配置并脱敏
+  const config = getRuntimeConfig();
+  const safeConfig = {
+    ...config,
+    kimi: {
+      ...config.kimi,
+      // API Key 脱敏：仅返回是否已配置的标志
+      apiKey: hasApiKey("kimi") ? "********" : "",
+      hasApiKey: hasApiKey("kimi"),
+    },
+  };
+
   return {
     provider,
     model: getModelName(provider),
     isReady,
     statusError,
-    config: getRuntimeConfig(),
+    config: safeConfig,
     availableModels: {
       ollama: AVAILABLE_OLLAMA_MODELS,
       kimi: AVAILABLE_KIMI_MODELS,
@@ -1251,6 +1311,10 @@ module.exports = {
   getRuntimeConfig,
   setRuntimeConfig,
   initRuntimeConfig,  // 新增：服务启动时初始化配置
+
+  // 安全 API Key 管理
+  getSecureApiKey,    // 安全获取 API Key（环境变量优先）
+  hasApiKey,          // 检查 API Key 是否已配置
 
   // 模型管理
   unloadModel,

@@ -9,9 +9,6 @@ import {
   ChevronDown,
   Lock,
   Brain,
-  Cpu,
-  Trash2,
-  RefreshCw,
 } from 'lucide-react'
 import { eventBus, EVENTS } from './utils/eventBus'
 import {
@@ -29,6 +26,7 @@ import {
   HumanReviewToggle,
   AI_CONFIG_TOOLTIPS,
 } from './components/AiConfigControls'
+import ModelConfigPanel from './components/config/ModelConfigPanel'
 
 // API 请求超时（毫秒）- 后端未启动时快速失败，避免挂起导致页面假死
 const API_TIMEOUT = 15000
@@ -403,10 +401,10 @@ function App({ isEmbedded = false }) {
       {toast && (
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top duration-300">
           <div
-            className={`rounded-lg border px-4 py-3 shadow-lg ${toast.type === 'error'
-              ? 'border-red-200 bg-red-50 text-red-900'
-              : 'border-green-200 bg-green-50 text-green-900'
-              }`}
+            className={`rounded - lg border px - 4 py - 3 shadow - lg ${toast.type === 'error'
+                ? 'border-red-200 bg-red-50 text-red-900'
+                : 'border-green-200 bg-green-50 text-green-900'
+              } `}
           >
             <div className="flex items-center gap-2">
               {toast.type === 'error' ? (
@@ -448,39 +446,39 @@ function App({ isEmbedded = false }) {
       )}
 
       {/* Main Content - Configuration Panel */}
-      <div className={`mx-auto px-6 py-6 ${isEmbedded ? 'max-w-lg' : 'max-w-2xl'}`}>
+      <div className={`mx - auto px - 6 py - 6 ${isEmbedded ? 'max-w-lg' : 'max-w-2xl'} `}>
         <div className={isEmbedded
           ? 'p-6'
           : 'rounded-xl border border-slate-200 bg-white p-6 shadow-sm'
         }>
           {/* Tab 切换栏 */}
-          <div className={`mb-6 flex rounded-lg border overflow-hidden ${isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
-            }`}>
+          <div className={`mb - 6 flex rounded - lg border overflow - hidden ${isEmbedded ? 'border-[#27272a]' : 'border-slate-200'
+            } `}>
             {/* 主 Tab：选中态为下划线，与子 Tab 色块区分 */}
             <button
               onClick={() => setActiveTab('project')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'project'
-                ? isEmbedded
-                  ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
-                  : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
-                : isEmbedded
-                  ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
-                  : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
-                }`}
+              className={`flex - 1 flex items - center justify - center gap - 2 px - 4 py - 3 text - sm font - medium transition - all duration - 200 ${activeTab === 'project'
+                  ? isEmbedded
+                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff] border-r border-[#27272a]'
+                    : 'bg-white text-primary border-b-2 border-primary border-r border-slate-200'
+                  : isEmbedded
+                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa] border-r border-[#27272a]'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border-r border-slate-200'
+                } `}
             >
               <Settings className="h-4 w-4" />
               <span>项目配置</span>
             </button>
             <button
               onClick={() => setActiveTab('ai')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 ${activeTab === 'ai'
-                ? isEmbedded
-                  ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
-                  : 'bg-white text-primary border-b-2 border-primary'
-                : isEmbedded
-                  ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                  : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                }`}
+              className={`flex - 1 flex items - center justify - center gap - 2 px - 4 py - 3 text - sm font - medium transition - all duration - 200 ${activeTab === 'ai'
+                  ? isEmbedded
+                    ? 'bg-[#09090b] text-[#165dff] border-b-2 border-[#165dff]'
+                    : 'bg-white text-primary border-b-2 border-primary'
+                  : isEmbedded
+                    ? 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                } `}
             >
               <Brain className="h-4 w-4" />
               <span>AI 能力配置</span>
@@ -504,238 +502,40 @@ function App({ isEmbedded = false }) {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isLocked}
-                    className={`flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                      ? 'border-[#27272a] bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a]'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
+                    className={`flex w - full items - center justify - center gap - 2 rounded - lg border px - 3 py - 2 text - sm font - medium transition - colors disabled: opacity - 50 disabled: cursor - not - allowed ${isEmbedded
+                        ? 'border-[#27272a] bg-[#09090b] text-[#a1a1aa] hover:bg-[#27272a]'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      } `}
                   >
                     <Upload className="h-4 w-4" />
                     上传文档
                   </button>
                   {prdFile && (
-                    <p className={`mt-2 text-xs ${isEmbedded ? 'text-[#71717a]' : 'text-slate-500'}`}>
+                    <p className={`mt - 2 text - xs ${isEmbedded ? 'text-[#71717a]' : 'text-slate-500'} `}>
                       已选择：{prdFile.name}，点击「保存配置」后解析文档
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* 模型配置区块 */}
-              <div className={`mb-6 pt-4 border-t ${isEmbedded ? 'border-[#27272a]' : 'border-slate-200'}`}>
-                {/* 标题栏 - 可折叠 */}
-                <button
-                  onClick={() => setShowModelConfig(!showModelConfig)}
-                  className={`w-full mb-4 flex items-center justify-between group ${isEmbedded ? 'text-[#f4f4f5]' : 'text-slate-900'
-                    }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Cpu className={`h-5 w-5 ${isEmbedded ? 'text-[#10b981]' : 'text-emerald-500'}`} />
-                    <h3 className="text-sm font-semibold">模型配置</h3>
-                  </div>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform duration-200 ${showModelConfig ? 'rotate-180' : ''
-                      } ${isEmbedded ? 'text-[#71717a]' : 'text-slate-400'}`}
-                  />
-                </button>
-
-                {/* 模型配置内容 */}
-                {showModelConfig && (
-                  <div className="space-y-4">
-                    {/* 紧急断开：立即切 Mock 并刷新，打断 API 死循环 */}
-                    <EmergencyDisconnectButton />
-                    {/* 提供商选择 */}
-                    <div>
-                      <label className={`mb-2 block text-sm font-medium ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-700'}`}>
-                        AI 提供商
-                      </label>
-                      <div className="flex rounded-lg border border-[#27272a] overflow-hidden">
-                        {[
-                          { value: 'mock', label: '🧪 Mock', desc: '测试模式' },
-                          { value: 'ollama', label: '🦙 Ollama', desc: '本地模型' },
-                          { value: 'kimi', label: '🌙 Kimi', desc: '云端 API' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => !isLocked && handleModelConfigChange('provider', opt.value)}
-                            disabled={isLocked}
-                            className={`flex-1 px-3 py-2 text-xs font-medium transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${modelConfig.provider === opt.value
-                              ? 'bg-[#10b981]/20 text-[#10b981]'
-                              : 'bg-[#09090b] text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                              } disabled:opacity-50 disabled:cursor-not-allowed border-r border-[#27272a] last:border-r-0`}
-                          >
-                            <span>{opt.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Ollama 配置 */}
-                    {modelConfig.provider === 'ollama' && (
-                      <div className={isEmbedded
-                        ? 'space-y-3 pt-3 mt-3 border-t border-[#27272a]'
-                        : 'space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
-                      }>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-[#71717a]">Ollama 本地模型</span>
-                          <button
-                            onClick={fetchInstalledOllamaModels}
-                            disabled={isLoadingModels}
-                            className="text-xs text-[#10b981] hover:text-[#34d399] flex items-center gap-1 disabled:opacity-50"
-                          >
-                            <RefreshCw className={`h-3 w-3 ${isLoadingModels ? 'animate-spin' : ''}`} />
-                            刷新列表
-                          </button>
-                        </div>
-
-                        {/* 模型选择 */}
-                        <div>
-                          <label className={`mb-1 block text-xs ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-600'}`}>
-                            选择模型
-                          </label>
-                          <select
-                            value={modelConfig.ollama?.model || ''}
-                            onChange={(e) => handleModelConfigChange('ollama.model', e.target.value)}
-                            disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                              }`}
-                          >
-                            <optgroup label="推荐模型">
-                              {availableModels.ollama?.map((m) => (
-                                <option key={m.value} value={m.value}>
-                                  {m.label}
-                                </option>
-                              ))}
-                            </optgroup>
-                            {installedOllamaModels.length > 0 && (
-                              <optgroup label="已安装模型">
-                                {installedOllamaModels.map((m) => (
-                                  <option key={m.value} value={m.value}>
-                                    {m.label}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
-                        </div>
-
-                        {/* 释放模型按钮 */}
-                        <button
-                          onClick={handleUnloadModel}
-                          disabled={isUnloading || isLocked}
-                          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {isUnloading ? (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              释放中...
-                            </>
-                          ) : (
-                            <>
-                              <Trash2 className="h-3 w-3" />
-                              释放模型（回收内存）
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Kimi 配置 */}
-                    {modelConfig.provider === 'kimi' && (
-                      <div className={isEmbedded
-                        ? 'space-y-3 pt-3 mt-3 border-t border-[#27272a]'
-                        : 'space-y-3 p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
-                      }>
-                        <span className="text-xs text-[#71717a]">Kimi (Moonshot) API</span>
-
-                        {/* API Key */}
-                        <div>
-                          <label className={`mb-1 block text-xs ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-600'}`}>
-                            API Key
-                          </label>
-                          <input
-                            type="password"
-                            value={modelConfig.kimi?.apiKey || ''}
-                            onChange={(e) => handleModelConfigChange('kimi.apiKey', e.target.value)}
-                            placeholder="sk-..."
-                            disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] placeholder-[#52525c] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                              }`}
-                          />
-                        </div>
-
-                        {/* 模型选择 */}
-                        <div>
-                          <label className={`mb-1 block text-xs ${isEmbedded ? 'text-[#a1a1aa]' : 'text-slate-600'}`}>
-                            选择模型
-                          </label>
-                          <select
-                            value={modelConfig.kimi?.model || ''}
-                            onChange={(e) => handleModelConfigChange('kimi.model', e.target.value)}
-                            disabled={isLocked}
-                            className={`w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                              ? 'border-[#27272a] bg-[#18181b] text-[#f4f4f5] focus:border-[#3f3f46] focus:ring-[#27272a]'
-                              : 'border-slate-200 bg-white text-slate-900 focus:border-slate-400 focus:ring-slate-200'
-                              }`}
-                          >
-                            {availableModels.kimi?.map((m) => (
-                              <option key={m.value} value={m.value}>
-                                {m.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Mock 模式提示 */}
-                    {modelConfig.provider === 'mock' && (
-                      <div className={isEmbedded
-                        ? 'pt-3 mt-3 border-t border-[#27272a]'
-                        : 'p-3 rounded-lg bg-[#09090b] border border-[#27272a]'
-                      }>
-                        <p className="text-xs text-[#71717a]">
-                          🧪 Mock 模式：返回固定测试回复，适合 UI 开发调试。
-                        </p>
-                      </div>
-                    )}
-
-                    {/* 保存模型配置按钮 */}
-                    <button
-                      onClick={saveModelConfig}
-                      disabled={isSavingModel || isLocked || !isModelConfigChanged()}
-                      className={`w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmbedded
-                        ? isModelConfigChanged()
-                          ? 'bg-[#10b981] text-white hover:bg-[#059669]'
-                          : 'bg-[#27272a] text-[#71717a]'
-                        : isModelConfigChanged()
-                          ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                          : 'bg-slate-200 text-slate-500'
-                        }`}
-                    >
-                      {isSavingModel ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          保存中...
-                        </>
-                      ) : isModelConfigChanged() ? (
-                        <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          应用模型配置
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="h-4 w-4" />
-                          当前配置已生效
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* 模型配置区块 - 使用独立组件 */}
+              <ModelConfigPanel
+                isEmbedded={isEmbedded}
+                isOpen={showModelConfig}
+                onToggle={() => setShowModelConfig(!showModelConfig)}
+                config={modelConfig}
+                onConfigChange={handleModelConfigChange}
+                onSave={saveModelConfig}
+                isLocked={isLocked}
+                isSaving={isSavingModel}
+                availableModels={availableModels}
+                installedOllamaModels={installedOllamaModels}
+                onRefreshOllama={fetchInstalledOllamaModels}
+                onUnloadModel={handleUnloadModel}
+                isUnloading={isUnloading}
+                isLoadingModels={isLoadingModels}
+                hasChanges={isModelConfigChanged()}
+              />
             </>
           )}
 
@@ -749,10 +549,10 @@ function App({ isEmbedded = false }) {
                   <button
                     onClick={() => !isLocked && setActiveConfigRole('client')}
                     disabled={isLocked}
-                    className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'client'
-                      ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-400 shadow-sm'
-                      : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`flex - 1 px - 4 py - 3 text - sm font - medium transition - all duration - 200 flex items - center justify - center gap - 2 rounded - lg ${activeConfigRole === 'client'
+                        ? 'bg-gradient-to-r from-red-500/20 to-red-600/10 text-red-400 shadow-sm'
+                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      } disabled: opacity - 50 disabled: cursor - not - allowed`}
                   >
                     <span className="text-lg">🔴</span>
                     <span>甲方配置</span>
@@ -761,10 +561,10 @@ function App({ isEmbedded = false }) {
                   <button
                     onClick={() => !isLocked && setActiveConfigRole('vendor')}
                     disabled={isLocked}
-                    className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 rounded-lg ${activeConfigRole === 'vendor'
-                      ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-blue-400 shadow-sm'
-                      : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    className={`flex - 1 px - 4 py - 3 text - sm font - medium transition - all duration - 200 flex items - center justify - center gap - 2 rounded - lg ${activeConfigRole === 'vendor'
+                        ? 'bg-gradient-to-r from-blue-500/20 to-blue-600/10 text-blue-400 shadow-sm'
+                        : 'text-[#71717a] hover:bg-[#27272a] hover:text-[#a1a1aa]'
+                      } disabled: opacity - 50 disabled: cursor - not - allowed`}
                   >
                     <span className="text-lg">🔵</span>
                     <span>乙方配置</span>
@@ -773,10 +573,10 @@ function App({ isEmbedded = false }) {
                 </div>
 
                 {/* 角色描述 */}
-                <div className={`px-4 py-3 rounded-xl border ${activeConfigRole === 'client'
-                  ? 'border-red-500/20 bg-red-500/5'
-                  : 'border-blue-500/20 bg-blue-500/5'
-                  }`}>
+                <div className={`px - 4 py - 3 rounded - xl border ${activeConfigRole === 'client'
+                    ? 'border-red-500/20 bg-red-500/5'
+                    : 'border-blue-500/20 bg-blue-500/5'
+                  } `}>
                   <p className="text-xs text-[#a1a1aa]">
                     {activeConfigRole === 'client'
                       ? '💼 甲方 AI：作为客户/老板审查文档，发现问题并提出质疑'
@@ -901,10 +701,10 @@ function App({ isEmbedded = false }) {
           <button
             onClick={handleSavePersona}
             disabled={isSavingPersona || isLocked}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mt-6 ${isEmbedded
-              ? 'bg-gradient-to-r from-[#165dff] to-[#1e6fff] text-white hover:shadow-lg hover:shadow-[#165dff]/25'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
-              }`}
+            className={`flex w - full items - center justify - center gap - 2 rounded - xl px - 4 py - 3 text - sm font - semibold transition - all duration - 200 disabled: opacity - 50 disabled: cursor - not - allowed mt - 6 ${isEmbedded
+                ? 'bg-gradient-to-r from-[#165dff] to-[#1e6fff] text-white hover:shadow-lg hover:shadow-[#165dff]/25'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              } `}
           >
             {isSavingPersona ? (
               <>
