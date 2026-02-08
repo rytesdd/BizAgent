@@ -95,6 +95,17 @@ const DEFAULT_VENDOR_AI_CONFIG = {
 
 const DEFAULT_DB = {
     project_context: { prd_text: "", prd_file_path: "" },
+    // 项目元数据 (供 Agentic Router 的 query_db 工具使用)
+    project_meta: {
+        project_name: "BizAgent AI 协作平台",
+        version: "1.0.0",
+        progress: "开发阶段 (45%)",
+        stakeholders: {
+            client: "张总 (CTO)",
+            vendor: "李工 (PM)",
+        },
+        current_stage: "API 接口开发与联调",
+    },
     personas: {
         client: "挑剔技术总监",
         vendor: "卑微项目经理",
