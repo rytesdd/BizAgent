@@ -15,7 +15,7 @@ const { Mutex } = require("async-mutex");
 // ============================================
 
 const DATA_DIR = path.join(__dirname, "../../data");
-const DB_PATH = path.join(DATA_DIR, "db.json");
+const DB_PATH = path.join(DATA_DIR, "db_temp.json"); // Temporary Switch due to permission issue on db.json
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 
 // 评论来源类型常量
@@ -114,9 +114,9 @@ const DEFAULT_DB = {
     vendor_ai_config: DEFAULT_VENDOR_AI_CONFIG,
     // 模型配置（持久化）
     model_config: {
-        provider: "mock",
+        provider: "kimi",
         ollama: { model: "qwen3-vl:8b" },
-        kimi: { model: "moonshot-v1-8k", apiKey: "" },
+        kimi: { model: "moonshot-v1-32k", apiKey: "" },
     },
     comments: [],
     // 会话管理（新结构）

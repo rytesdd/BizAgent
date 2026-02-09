@@ -6,10 +6,13 @@
  */
 
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { Bubble, Sender, ThoughtChain } from '@ant-design/x';
+import { Bubble, Sender } from '@ant-design/x';
 import { ConfigProvider, theme } from 'antd';
 import { sendMessageToKimi } from '../services/kimiService';
+import { reviewDocumentStream } from '../services/reviewService';
 import { DOCUMENT_CONTENT } from '../data/documentModel';
+import ThinkingAccordion from './ThinkingAccordion';
+import MessageRenderer from './MessageRenderer';
 
 // ==========================================
 // AI Avatar Component
@@ -52,7 +55,7 @@ const ThinkingIndicator = () => (
 // ==========================================
 // Main Component
 // ==========================================
-const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A' }, ref) => {
+const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A', onWidgetClick }, ref) => {
     // --- State: 独立的消息状态（甲方/乙方隔离）---
     const [clientMessages, setClientMessages] = useState([
         {
@@ -76,6 +79,11 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState('');
 
+    // 流式审查状态
+    const [isReviewing, setIsReviewing] = useState(false);
+    const [thinkingLog, setThinkingLog] = useState('');
+    const abortControllerRef = useRef(null);
+
     const scrollRef = useRef(null);
 
     // Expose triggerReview method to parent
@@ -92,13 +100,192 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages, loading]);
+    }, [messages, loading, thinkingLog]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     // --- Send Message Handler ---
     // --- Send Message Handler ---
     const handleSend = async (content, isAutoReview = false) => {
         // Allow empty content if it's an auto-review trigger (which sends a system prompt instruction as user message equivalent)
         if (!isAutoReview && (!content || !content.trim())) return;
+
+        // ========================================
+        // DEBUG: /test_cards command
+        // Injects mock widgets for UI testing
+        // Uses new "Narrative Stream" format with contentBlocks
+        // ========================================
+        if (content && content.trim() === '/test_cards') {
+            const mockNarrativeMessage = {
+                key: `debug_${Date.now()}`,
+                role: 'ai',
+                isThinking: false,
+                // NEW: contentBlocks array for Narrative Stream experience
+                contentBlocks: [
+                    // 1. The Hook (Situation)
+                    {
+                        type: 'markdown',
+                        content: '### 📊 深度商机复盘：四川政务大数据三期\n\n基于最新的情报扫描，该项目的基本面非常强劲，赢单胜率已锁定在 **92%**。但不要掉以轻心，我们在 ROI 测算上还有优化空间：'
+                    },
+                    {
+                        type: 'component_group',
+                        layoutHint: 'stacked',
+                        widgets: [
+                            {
+                                type: 'snapshot',
+                                data: {
+                                    label: '赢单胜率',
+                                    value: '92.0%', // Updated to match text
+                                    title: '四川省政务大数据平台三期扩容项目',
+                                    trend: 'up',
+                                    kvPairs: {
+                                        '契合度': '95%',
+                                        '竞争情况': '低'
+                                    }
+                                }
+                            },
+                            {
+                                type: 'snapshot',
+                                data: {
+                                    label: '预估 ROI',
+                                    value: '2.8M',
+                                    title: '预计回报周期：18个月',
+                                    trend: 'flat',
+                                    kvPairs: {
+                                        '关键人': '张处长',
+                                        '关系紧密度': '高'
+                                    }
+                                }
+                            }
+                        ]
+                    },
+
+                    // 2. The Conflict (Complication)
+                    {
+                        type: 'markdown',
+                        content: '🚨 **然而，外部环境发生了突发变量**。监测到两条可能影响交付周期的红色预警，建议优先处理：'
+                    },
+                    {
+                        type: 'component_group',
+                        layoutHint: 'stacked',
+                        widgets: [
+                            {
+                                type: 'notification',
+                                data: {
+                                    level: 'warning',
+                                    title: '竞争对手价格策略变动',
+                                    message: 'Aliyun 于今日发布了针对政务市场的"Lite版"方案，报价可能低于预算 40%。建议立即启动价值锁定流程。',
+                                    source: '竞品情报雷达',
+                                    time: '10分钟前'
+                                }
+                            },
+                            {
+                                type: 'notification',
+                                data: {
+                                    level: 'danger',
+                                    title: '投标截止时间临近',
+                                    message: '四川省政务大数据三期项目投标截止日期为 2026-02-20，距今仅剩 11 天。',
+                                    source: '项目日程',
+                                    time: '系统提醒'
+                                }
+                            }
+                        ]
+                    },
+
+                    // 3. The Diagnosis (Analysis)
+                    {
+                        type: 'markdown',
+                        content: '为了应对这一风险，我们需要重新审视决策链。目前的卡点在于 **张处长**。虽然他总体支持，但他对 *"资金合规"* 的顾虑（Pain Point）可能被竞争对手利用。这是他的最新画像：'
+                    },
+                    {
+                        type: 'component_group',
+                        layoutHint: 'stacked',
+                        widgets: [
+                            {
+                                type: 'key_person',
+                                data: {
+                                    name: '张处长',
+                                    role: '四川省大数据中心 · 项目负责人',
+                                    stance: 'Support',
+                                    influence: 'High',
+                                    pain_point: '对数据治理能力有高要求，担忧供应商难以落地"全链路溯源"功能'
+                                }
+                            }
+                        ]
+                    },
+
+                    // 4. The Evidence (Product Fit)
+                    {
+                        type: 'markdown',
+                        content: '技术层面我们依然占据制高点。对比最新的 PRD，我们的产品与需求匹配度高达 **95%**，这足以抵消部分价格劣势：'
+                    },
+                    {
+                        type: 'component_group',
+                        layoutHint: 'stacked',
+                        widgets: [
+                            {
+                                type: 'feature_list',
+                                data: {
+                                    doc_name: '三期建设需求规格说明书_v1.0.pdf',
+                                    match_score: '95%',
+                                    core_features: ['数据中台', '全链路治理', '智能分析', '可视化大屏', '安全合规'],
+                                    missing: 'None'
+                                }
+                            }
+                        ]
+                    },
+
+                    // 5. The Solution (Action)
+                    {
+                        type: 'markdown',
+                        content: '👉 **基于以上研判，我生成了今日的行动清单**。请务必在本周五前完成对张处长的 “合规性” 定点爆破：'
+                    },
+                    {
+                        type: 'component_group',
+                        layoutHint: 'stacked',
+                        widgets: [
+                            {
+                                type: 'todo',
+                                data: {
+                                    task: '联系张处长确认技术方案评审时间，重点准备"全链路溯源"演示',
+                                    assignee: '李明 (售前)',
+                                    deadline: '2026-02-12',
+                                    priority: 'P0',
+                                    status: 'Todo'
+                                }
+                            },
+                            {
+                                type: 'todo',
+                                data: {
+                                    task: '制作竞品对比分析报告，突出我方在数据治理方面的优势',
+                                    assignee: '王芳 (产品)',
+                                    deadline: '2026-02-14',
+                                    priority: 'P1',
+                                    status: 'In Progress'
+                                }
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            setInputValue('');
+            setMessages(prev => [...prev,
+            { key: `user_${Date.now()}`, role: 'user', content: '/test_cards' },
+                mockNarrativeMessage
+            ]);
+            console.log('[DEBUG] /test_cards triggered - injected Narrative Stream message');
+            return;
+        }
+
+
 
         // If auto-review, simulate a user trigger message
         const displayContent = isAutoReview ? "启动虚拟代理自动审查..." : content.trim();
@@ -120,7 +307,8 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
             role: 'ai',
             content: '',
             thoughtContent: '',
-            isThinking: true
+            isThinking: true,
+            widgets: []  // Array to hold parsed widget objects
         };
         setMessages(prev => [...prev, initialAiMessage]);
 
@@ -151,24 +339,112 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
             let userPrompt = content ? content.trim() : "你好";
 
             // Special Logic for Auto Review (Button Trigger)
+            // Special Logic for Auto Review (Button Trigger) - USE STREAMING API
             if (isAutoReview) {
-                systemInstruction = `你是一位在大厂工作多年的高级产品经理专家（Senior Product Reviewer）。你的任务是严格审查用户提供的 PRD 文档。
+                // 使用流式 API 进行审查
+                setIsReviewing(true);
+                setThinkingLog('');
 
-** 第一阶段：深度思考 (Thinking Process) **
-首先，请在 <think> 标签内进行一步步的深度思考和推演。
-- 仔细阅读文档的每一句话，寻找逻辑漏洞、含糊不清的定义（如 "待定"、"TBD"）。
-- 检查规则是否存在自相矛盾的地方（例如："付费功能" 却 "消耗 0 积分"）。
-- 模拟用户使用场景，推演流程是否能跑通。
-- 保持批判性思维，像一位严格的面试官一样审视文档。
+                // 创建 AbortController
+                abortControllerRef.current = new AbortController();
 
-** 第二阶段：输出结果 (Final Output) **
-思考结束后，请将发现的问题整理成一个严格的 JSON 数组格式返回。
-${reviewInstructions}`;
+                await reviewDocumentStream({
+                    prdText: documentText,
+                    signal: abortControllerRef.current.signal,
+                    onDelta: (chunk) => {
+                        // 可选：记录所有 delta 用于调试
+                        // console.log('[Stream Delta]', chunk);
+                    },
+                    onThinking: (thinkingContent) => {
+                        // 实时更新思考日志
+                        setThinkingLog(thinkingContent);
 
-                userPrompt = `请审查以下 PRD 文档内容：\n\n=== 文档开始 ===\n${documentText}\n=== 文档结束 ===\n\n请输出审查结果。`;
-            } else {
-                // NORMAL CHAT MODE (With Intent Recognition)
-                systemInstruction = `你是一个专业的 AI 助手，正在帮助用户进行文档审查和项目协作。
+                        // 同时更新消息中的 thoughtContent
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? { ...msg, thoughtContent: thinkingContent }
+                                : msg
+                        ));
+                    },
+                    onComplete: ({ comments, thinkingContent }) => {
+                        console.log('[AiAssistant] Stream complete:', {
+                            commentCount: comments.length,
+                            thinkingLength: thinkingContent.length
+                        });
+
+                        // 生成审查摘要
+                        const generateReviewSummary = (commentList) => {
+                            const tags = new Set();
+                            const fullText = commentList.map(c => c.content || c.message || '').join(' ');
+
+                            // 关键词匹配
+                            if (/定价|积分|费用|钱|收费|价格/.test(fullText)) tags.add("定价策略");
+                            if (/合规|法律|风险|法务/.test(fullText)) tags.add("合规风险");
+                            if (/逻辑|矛盾|冲突|错误/.test(fullText)) tags.add("逻辑漏洞");
+                            if (/格式|标点|日期|排版|错别字/.test(fullText)) tags.add("规范性");
+                            if (/模糊|歧义|不明确|未说明/.test(fullText)) tags.add("表述清晰度");
+
+                            const tagArray = Array.from(tags);
+                            const focusArea = tagArray.length > 0
+                                ? `发现在 **${tagArray.slice(0, 2).join('、')}** 等方面存在问题`
+                                : "发现若干细节有待优化";
+
+                            return `本次审查${focusArea}，共定位到 ${commentList.length} 个潜在风险点，详情请查看右侧列表。`;
+                        };
+
+                        const summaryContent = comments.length > 0
+                            ? generateReviewSummary(comments)
+                            : "审查完成，未发现明显风险点。";
+
+                        // 更新消息状态
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? {
+                                    ...msg,
+                                    isThinking: false,
+                                    thoughtContent: thinkingContent + '\n[系统] 分析完成，生成报告如下。',
+                                    content: summaryContent,
+                                    isStreamComplete: true
+                                }
+                                : msg
+                        ));
+
+                        // 传递评论给父组件
+                        if (comments.length > 0 && typeof onTriggerAiReview === 'function') {
+                            // 转换为父组件期望的格式
+                            const formattedComments = comments.map(c => ({
+                                quote: c.quoted_text || c.quote || '',
+                                message: c.content || c.message || ''
+                            }));
+                            onTriggerAiReview(formattedComments);
+                        }
+
+                        setIsReviewing(false);
+                        setLoading(false);
+                    },
+                    onError: (error) => {
+                        console.error('[AiAssistant] Stream error:', error);
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? {
+                                    ...msg,
+                                    isThinking: false,
+                                    content: `审查过程中发生错误: ${error.message}`
+                                }
+                                : msg
+                        ));
+                        setIsReviewing(false);
+                        setLoading(false);
+                    }
+                });
+
+                // 流式处理结束后不需要继续执行下面的逻辑
+                return;
+            }
+
+            // --- NORMAL CHAT MODE (Non-Streaming) ---
+            // NORMAL CHAT MODE (With Intent Recognition)
+            systemInstruction = `你是一个专业的 AI 助手，正在帮助用户进行文档审查和项目协作。
 你的知识库中已经包含了当前 PRD 文档的内容。
 
 === 当前 PRD 文档内容 ===
@@ -180,7 +456,7 @@ ${reviewInstructions}
 ** 交互策略 **
 1. 如果用户只是进行日常提问或闲聊（例如"你好"、"文档里讲了什么"），请用自然语言回答，**不要**输出 JSON。
 2. 如果用户明确要求进行"审查"、"挑刺"、"找问题"（例如"看看文档有什么问题"、"检查计费规则"），请立即执行审查逻辑，并**必须**输出上述 JSON 格式。`;
-            }
+
             // Build conversation history for context
             const conversationHistory = [
                 {
@@ -192,31 +468,13 @@ ${reviewInstructions}
                     .slice(-10) // Keep last 10 messages for context
                     .map(m => ({
                         role: m.role === 'ai' ? 'assistant' : 'user',
-                        // If we have thoughtContent, we might want to exclude it from context or keep it
-                        // For now, let's keep simple content
                         content: m.content
                     })),
                 { role: 'user', content: userPrompt }
             ];
 
-            // Start Fake Streaming for Thinking Process
+            // 普通聊天模式：使用假的思考动画
             let thoughtAccumulator = "";
-
-            // Define two types of logs
-            const AUTO_REVIEW_LOG = `正在初始化文档分析引擎...
-加载 PRD 上下文数据 (12KB)... 完成
-正在构建语义依赖图谱...
-[Phase 1] 逻辑一致性自检
-- 扫描 "计费规则" 模块... 发现潜在冲突：积分扣除规则设定为 0，这与付费属性矛盾。
-- 扫描 "时间格式" ... 发现非标准定义 "TBD"，建议标准化。
-[Phase 2] 用户路径模拟
-- 模拟新用户注册 -> 付费转化流程...
-- 正在校验边界条件：余额不足时的扣费行为...
-[Phase 3] 生成审查报告
-- 提取关键引用 (Quotes)...
-- 格式化 JSON 输出...
-- 最终校验中...`;
-
             const GENERAL_LOG = `正在接收用户指令...
 加载上下文环境...
 正在理解意图...
@@ -224,13 +482,9 @@ ${reviewInstructions}
 构建回答逻辑...
 正在组织语言...`;
 
-            // Choose log based on mode
-            const TARGET_LOG = isAutoReview ? AUTO_REVIEW_LOG : GENERAL_LOG;
-
             const typingInterval = setInterval(() => {
-                if (thoughtAccumulator.length < TARGET_LOG.length) {
-                    // Add 1-3 chars at a time for realistic typing feel
-                    const nextChunk = TARGET_LOG.slice(thoughtAccumulator.length, thoughtAccumulator.length + Math.floor(Math.random() * 3) + 1);
+                if (thoughtAccumulator.length < GENERAL_LOG.length) {
+                    const nextChunk = GENERAL_LOG.slice(thoughtAccumulator.length, thoughtAccumulator.length + Math.floor(Math.random() * 3) + 1);
                     thoughtAccumulator += nextChunk;
 
                     setMessages(prev => prev.map(msg =>
@@ -239,50 +493,83 @@ ${reviewInstructions}
                             : msg
                     ));
                 }
-            }, 50); // Speed of typing
+            }, 50);
 
             const response = await sendMessageToKimi(conversationHistory);
+
+            // --- Widget Parsing State Machine ---
+            // Parse <widget>...</widget> tags from response
+            const parseWidgetsFromContent = (rawContent) => {
+                const widgets = [];
+                let cleanContent = '';
+                let remaining = rawContent;
+                let isInsideWidget = false;
+                let widgetBuffer = '';
+
+                while (remaining.length > 0) {
+                    if (isInsideWidget) {
+                        const endIdx = remaining.indexOf('</widget>');
+                        if (endIdx === -1) {
+                            // Tag not closed, add to buffer
+                            widgetBuffer += remaining;
+                            break;
+                        } else {
+                            // End tag found
+                            widgetBuffer += remaining.slice(0, endIdx);
+                            // Try to parse JSON
+                            try {
+                                const widgetData = JSON.parse(widgetBuffer.trim());
+                                widgets.push(widgetData);
+                                console.log('[AiAssistant] Parsed widget:', widgetData);
+                            } catch (e) {
+                                console.warn('[AiAssistant] Failed to parse widget JSON:', e, widgetBuffer);
+                            }
+                            widgetBuffer = '';
+                            remaining = remaining.slice(endIdx + 9); // Skip </widget>
+                            isInsideWidget = false;
+                        }
+                    } else {
+                        const startIdx = remaining.indexOf('<widget>');
+                        if (startIdx === -1) {
+                            // No more widgets, append rest to clean content
+                            cleanContent += remaining;
+                            break;
+                        } else {
+                            // Widget tag found
+                            cleanContent += remaining.slice(0, startIdx);
+                            remaining = remaining.slice(startIdx + 8); // Skip <widget>
+                            isInsideWidget = true;
+                        }
+                    }
+                }
+
+                return { cleanContent: cleanContent.trim(), widgets };
+            };
 
             // API Finished: Clear typing interval
             clearInterval(typingInterval);
 
             const rawText = response.trim();
-
             console.log("[AiAssistant] Raw Response:", rawText);
 
-            // 1. Extract Thought (Regex to find content between <think> tags)
-            const thinkMatch = rawText.match(/<think>([\s\S]*?)<\/think>/i);
-            // If real think content exists, append it to our mock log for richness, or just replace it.
-            // For better UX, let's keep our "Mock Log" as the visual "process", and maybe append the real final summary if distinct.
-            // But since we want to "stop" the chain when comments appear, we just finalize it here.
+            // --- Parse widgets from response ---
+            const { cleanContent: contentWithoutWidgets, widgets: parsedWidgets } = parseWidgetsFromContent(rawText);
 
-            // To make it look "finished", ensure we show the user we are done thinking.
-            const finalThoughtDisplay = thoughtAccumulator + "\n[系统] 分析完成，生成报告如下。";
-
-            const thoughtProcess = thinkMatch ? thinkMatch[1].trim() : finalThoughtDisplay;
-
-            // 2. Extract JSON (Regex to find content between ```json blocks or simple brackets)
-            // Remove the thought part to isolate the 'content' part
-            let mainContent = rawText.replace(/<think>[\s\S]*?<\/think>/i, "").trim();
-
-            // Try to extract JSON array if it exists
-            const jsonMatch = mainContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
+            // Extract JSON if present (for review comments)
+            let mainContent = contentWithoutWidgets;
+            const jsonMatch = contentWithoutWidgets.match(/\[\s*\{[\s\S]*\}\s*\]/);
             let finalComments = [];
 
             if (jsonMatch) {
                 try {
-                    // It might be wrapped in ```json ... ```, extract the array part only
-                    const jsonStr = jsonMatch[0];
-                    finalComments = JSON.parse(jsonStr);
+                    finalComments = JSON.parse(jsonMatch[0]);
                     console.log("[AiAssistant] Parsed JSON Comments:", finalComments.length);
 
-                    // Optional: If we successfully parsed JSON, maybe we only want to show a summary in the bubble?
-                    // Generate a dynamic summary based on the content of comments
+                    // Generate summary
                     const generateReviewSummary = (comments) => {
                         const tags = new Set();
-                        const fullText = comments.map(c => c.message).join(' ');
+                        const fullText = comments.map(c => c.message || c.content || '').join(' ');
 
-                        // Simple Keyword Matching
                         if (/定价|积分|费用|钱|收费|价格/.test(fullText)) tags.add("定价策略");
                         if (/合规|法律|风险|法务/.test(fullText)) tags.add("合规风险");
                         if (/逻辑|矛盾|冲突|错误/.test(fullText)) tags.add("逻辑漏洞");
@@ -297,7 +584,6 @@ ${reviewInstructions}
                         return `本次审查${focusArea}，共定位到 ${comments.length} 个潜在风险点，详情请查看右侧列表。`;
                     };
 
-                    // Apply summary to BOTH Auto-Review (Button) and Intent-Based Review (Chat)
                     mainContent = generateReviewSummary(finalComments);
 
                 } catch (e) {
@@ -305,38 +591,37 @@ ${reviewInstructions}
                 }
             }
 
-            // 3. Update UI State (Finalize)
+            // Update UI State with parsed widgets
+            const finalThoughtDisplay = thoughtAccumulator + "\n[系统] 分析完成。";
             setMessages(prev => prev.map(msg =>
                 msg.key === aiMessageId
                     ? {
                         ...msg,
                         isThinking: false,
-                        thoughtContent: finalThoughtDisplay, // Show the full mock log + finished status
+                        thoughtContent: finalThoughtDisplay,
                         content: mainContent,
-                        originalRawContent: rawText // Keep raw for history
+                        widgets: parsedWidgets,  // Add parsed widgets to message
+                        originalRawContent: rawText
                     }
                     : msg
             ));
 
-            // 4. Pass Data to Parent (Phase 3 will finalize this)
+            // Pass Data to Parent
             if (finalComments.length > 0 && typeof onTriggerAiReview === 'function') {
-                // Forward compatibility hook
                 onTriggerAiReview(finalComments);
             }
 
-
         } catch (error) {
             console.error('[AiAssistantSidebar] Error:', error);
-            const errorMessage = {
+            setMessages(prev => prev.filter(m => m.key !== aiMessageId));
+            setMessages(prev => [...prev, {
                 key: `error_${Date.now()}`,
                 role: 'ai',
                 content: '抱歉，发生了错误。请稍后再试。'
-            };
-            setMessages(prev => [...prev, errorMessage]);
-            // Remove the placeholder if it failed completely
-            setMessages(prev => prev.filter(m => m.key !== aiMessageId));
+            }]);
         } finally {
             setLoading(false);
+            setIsReviewing(false);
         }
     };
 
@@ -348,28 +633,35 @@ ${reviewInstructions}
             return <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg}</div>;
         }
 
+        // Determine if we should show MessageRenderer
+        const hasNarrativeContent = msg.contentBlocks && msg.contentBlocks.length > 0;
+        const hasLegacyContent = msg.content || (msg.widgets && msg.widgets.length > 0);
+        const shouldShowContent = hasNarrativeContent || hasLegacyContent || !msg.isThinking;
+
         return (
             <div className="flex flex-col gap-2">
+                {/* Thinking Accordion - supports both fake timer and real-time streaming */}
                 {(msg.isThinking || msg.thoughtContent) && (
-                    <div className="rounded-lg overflow-hidden mb-2">
-                        {/* Use Ant Design X Think Component */}
-                        <ThoughtChain
-                            items={msg.thoughtContent ? [{ title: 'Thinking Process', content: msg.thoughtContent }] : []}
-                            status={msg.isThinking ? 'pending' : 'success'}
-                            collapsible
-                        />
-                    </div>
+                    <ThinkingAccordion
+                        loading={msg.isThinking}
+                        realTimeLogs={msg.thoughtContent || null}
+                    />
                 )}
 
-                {/* Main Content */}
-                {(msg.content || !msg.isThinking) && (
-                    <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${msg.isThinking && !msg.content ? 'animate-pulse opacity-50' : ''}`}>
-                        {msg.content}
-                    </div>
+                {/* Main Content + Widgets using MessageRenderer */}
+                {shouldShowContent && (
+                    <MessageRenderer
+                        contentBlocks={msg.contentBlocks}
+                        content={msg.content}
+                        widgets={msg.widgets || []}
+                        isThinking={msg.isThinking && !msg.content && !hasNarrativeContent}
+                        onWidgetClick={onWidgetClick}
+                    />
                 )}
             </div>
         );
     };
+
 
     return (
         <ConfigProvider
@@ -406,7 +698,7 @@ ${reviewInstructions}
                 {/* --- Message List (Scrollable) --- */}
                 <div
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-4 space-y-4"
+                    className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
                 >
                     {messages.map((msg) => (
                         <div
@@ -422,11 +714,14 @@ ${reviewInstructions}
                                 content={renderBubbleContent(msg)}
                                 styles={{
                                     content: {
-                                        maxWidth: '260px',
+                                        // AI messages: full width, no max constraint
+                                        // User messages: compact with max width
+                                        maxWidth: msg.role === 'user' ? '220px' : 'none',
+                                        width: msg.role === 'user' ? 'auto' : '100%',
                                         background: msg.role === 'user' ? '#3f3f46' : 'transparent',
                                         border: msg.role === 'user' ? '1px solid #52525b' : 'none',
-                                        borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                                        padding: '12px 16px',
+                                        borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
+                                        padding: msg.role === 'user' ? '12px 16px' : '0',
                                         color: '#e4e4e7',
                                     }
                                 }}

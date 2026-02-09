@@ -373,6 +373,143 @@ app.post("/api/client/review", upload.single("prd_file"), async (req, res) => {
 });
 
 // ============================================
+// API: 甲方审查文档（SSE 流式 + Chain-of-Thought）
+// 
+// 响应格式：
+// data: {"type":"delta","content":"<thinking>\n"}
+// data: {"type":"delta","content":"正在分析..."}
+// data: {"type":"delta","content":"</thinking>\n"}
+// data: {"type":"delta","content":"[{\"content\":...}]"}
+// data: {"type":"done","fullContent":"..."}
+// ============================================
+
+app.post("/api/client/review-stream", upload.single("prd_file"), async (req, res) => {
+  // 设置 SSE 响应头
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // 禁用 Nginx 缓冲
+  res.flushHeaders?.();
+
+  // 辅助函数：发送 SSE 事件
+  const sendEvent = (data) => {
+    res.write("data: " + JSON.stringify(data) + "\n\n");
+  };
+
+  // 处理客户端断开连接
+  let isClientConnected = true;
+  req.on("close", () => {
+    isClientConnected = false;
+    logStep("Client Review Stream: 客户端断开连接");
+  });
+
+  try {
+    const data = readDb();
+    let prdText = "";
+    let prdFilePath = "";
+    let fileName = "";
+
+    // 解析 PRD 来源（与原有路由逻辑一致）
+    if (req.file) {
+      prdFilePath = path.relative(__dirname, req.file.path);
+      fileName = req.file.originalname;
+
+      const parseResult = await fileParser.parseFile(req.file.path, req.file.originalname);
+      if (!parseResult.success) {
+        sendEvent({ type: "error", error: parseResult.error });
+        return res.end();
+      }
+      prdText = parseResult.content;
+      logStep("解析上传 PRD 文件（流式）", { prdFilePath, type: parseResult.type, length: prdText.length });
+    } else if (req.body?.prd_text) {
+      prdText = String(req.body.prd_text);
+      logStep("使用请求中的 PRD 文本（流式）");
+    } else {
+      prdText = data.project_context?.prd_text || "";
+      prdFilePath = data.project_context?.prd_file_path || "";
+      logStep("使用历史 PRD 上下文（流式）");
+    }
+
+    if (!prdText.trim()) {
+      sendEvent({ type: "error", error: "PRD 内容为空" });
+      return res.end();
+    }
+
+    // 更新项目上下文
+    data.project_context = {
+      prd_text: prdText,
+      prd_file_path: prdFilePath,
+      file_name: fileName,
+      updated_at: new Date().toISOString(),
+    };
+    // 清空旧评论（审查前）
+    data.comments = [];
+    writeDb(data);
+
+    const persona = data.personas?.client || DEFAULT_DB.personas.client;
+    const aiConfig = data.client_ai_config || DEFAULT_CLIENT_AI_CONFIG;
+
+    // 收集完整响应用于最终解析
+    let fullContent = "";
+
+    // 调用流式审查服务
+    for await (const chunk of aiService.reviewDocumentStream(prdText, persona, aiConfig)) {
+      // 检查客户端是否仍然连接（使用 socket.destroyed 更可靠）
+      if (res.socket?.destroyed) {
+        logStep("Client Review Stream: Socket 已关闭，停止流");
+        break;
+      }
+
+      fullContent += chunk;
+      sendEvent({ type: "delta", content: chunk });
+    }
+
+    // 流结束后：解析 JSON 并保存评论
+    // 格式：<thinking>...</thinking> + JSON Array
+    let jsonPart = "";
+    const thinkingEndIndex = fullContent.lastIndexOf("</thinking>");
+    if (thinkingEndIndex !== -1) {
+      jsonPart = fullContent.slice(thinkingEndIndex + 11).trim(); // 跳过 </thinking>
+    } else {
+      // 没有 thinking 标签，整个内容都是 JSON
+      jsonPart = fullContent.trim();
+    }
+
+    // 解析 JSON 数组
+    const auditItems = aiService.parseJsonArray(jsonPart);
+    const comments = auditItems.map(normalizeCommentItem);
+
+    // 记录日志
+    comments.forEach((item) => {
+      logStep("[甲方AI评论-流式]", {
+        id: item.id,
+        at_user: item.target_user_id,
+        content_preview: item.content.slice(0, 50),
+      });
+    });
+
+    // 保存评论到数据库
+    const finalData = readDb();
+    finalData.comments.push(...comments);
+    writeDb(finalData);
+
+    // 发送完成事件
+    sendEvent({
+      type: "done",
+      comments: comments,
+      fullContent: fullContent,
+    });
+
+    logStep("Client Review Stream 完成", { commentCount: comments.length });
+  } catch (error) {
+    logStep("Client Review Stream 失败", { error: String(error) });
+    sendEvent({ type: "error", error: error.message || String(error) });
+  }
+
+  res.end();
+});
+
+// ============================================
 // API: 处理评论（使用控制器）
 // ============================================
 

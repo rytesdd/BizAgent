@@ -627,6 +627,39 @@ async function* handleMockRequestStream(messages) {
   }
 }
 
+/**
+ * Mock 模式流式审查响应：产出 <thinking>...</thinking> 标签后跟 JSON 数组
+ * 用于测试前端 Chain-of-Thought UI 而无需消耗 API tokens
+ * @yields {string} 每个 delta 文本片段
+ */
+async function* handleMockReviewStream() {
+  logStep("Mock 模式: 流式审查开始");
+
+  // 1. 产出 <thinking> 开始标签
+  yield "<thinking>\n";
+  await new Promise((r) => setTimeout(r, 200));
+
+  // 2. 逐行产出思维过程
+  for (const thought of MOCK_RESPONSES.thoughts) {
+    yield thought + "\n";
+    await new Promise((r) => setTimeout(r, 400)); // 模拟思考延迟
+  }
+
+  // 3. 产出 </thinking> 结束标签
+  yield "</thinking>\n";
+  await new Promise((r) => setTimeout(r, 200));
+
+  // 4. 产出 JSON 数组（分块）
+  const jsonStr = JSON.stringify(MOCK_RESPONSES.client_review, null, 2);
+  const chunkSize = 100;
+  for (let i = 0; i < jsonStr.length; i += chunkSize) {
+    yield jsonStr.slice(i, i + chunkSize);
+    await new Promise((r) => setTimeout(r, 30));
+  }
+
+  logStep("Mock 模式: 流式审查完成");
+}
+
 // ============================================
 // 业务封装函数
 // ============================================
@@ -693,6 +726,102 @@ ${pressurePrompt}`;
 
   const response = await callAI(messages, { temperature, responseType: "json" });
   return parseJsonArray(response);
+}
+
+/**
+ * 甲方审查文档 - 流式版本（Chain-of-Thought + SSE）
+ * 
+ * 产出格式：
+ * <thinking>
+ * 步骤1: 分析...
+ * 步骤2: 检查...
+ * </thinking>
+ * [{ "content": "...", "at_user": "...", "quoted_text": "..." }, ...]
+ * 
+ * @param {string} prdText - PRD 文档内容
+ * @param {string} persona - 甲方人格设定
+ * @param {Object} aiConfig - AI 配置
+ * @yields {string} 每个 delta 文本片段
+ */
+async function* reviewDocumentStream(prdText, persona, aiConfig = {}) {
+  const temperature = aiConfig?.cognitive_engine?.thinking_budget ?? 0.7;
+  const reviewerMode = aiConfig?.reviewer_mode || {};
+  const provider = getProvider();
+
+  logStep("开始流式审查文档（Chain-of-Thought）", { provider, prdLength: prdText.length });
+
+  // Mock 模式：使用专用的 Mock 流式审查
+  if (provider === AI_PROVIDERS.MOCK) {
+    yield* handleMockReviewStream();
+    return;
+  }
+
+  // 1. 解析配置参数
+  const feedbackStyle = reviewerMode.feedback_style || "Constructive";
+  const pressureLevel = reviewerMode.pressure_level ?? 0.6;
+
+  // 2. 构建风格指令
+  let stylePrompt = "";
+  switch (feedbackStyle) {
+    case "Harsh":
+      stylePrompt = "你的风格是非常严厉和直接的。不要客气，直接指出愚蠢的错误。关注每一个细节，即使是微小的问题也不要放过。";
+      break;
+    case "Socratic":
+      stylePrompt = "你的风格是苏格拉底式的。不要直接给出结论，而是通过提问来引导乙方思考潜在的风险。多用反问句。";
+      break;
+    case "Constructive":
+    default:
+      stylePrompt = "你的风格是建设性的。在指出问题的同时，尽量给出改进的方向。语气要专业且客观。";
+      break;
+  }
+
+  // 3. 构建压力/严格程度指令
+  let pressurePrompt = "";
+  if (pressureLevel > 0.8) {
+    pressurePrompt = "请用【极度严格】的标准审查。任何模糊不清、逻辑不严密、或者可能导致歧义的地方都必须指出。宁可错杀，不可放过。至少找出 5-8 个风险点。";
+  } else if (pressureLevel < 0.3) {
+    pressurePrompt = "请用【宽松】的标准审查。只关注那些会导致项目失败的重大逻辑漏洞或严重合规风险。忽略细枝末节。找出 1-3 个最关键的风险点即可。";
+  } else {
+    pressurePrompt = "请用【标准】的专业标准审查。关注逻辑漏洞、合规风险和需求不明确的地方。找出 3-5 个有价值的风险点。";
+  }
+
+  // 4. 构建 Chain-of-Thought 系统提示（关键修改）
+  const systemPrompt = `你是一个严格的技术审查员。
+${stylePrompt}
+${pressurePrompt}
+
+**重要：你必须严格遵循以下输出格式：**
+
+1. 首先，在 <thinking>...</thinking> XML 标签内，逐步分析文档：
+   - 识别文档的关键区域和内容
+   - 检查逻辑一致性和潜在风险
+   - 评估每个问题的严重程度
+
+2. 然后，在 </thinking> 标签之后，输出严格的 JSON 数组：
+   [{ "content": "问题描述...", "at_user": "角色", "quoted_text": "从 PRD 中原样复制的被评论原文" }]
+
+注意：
+- <thinking> 标签内的内容用中文书写，展示你的思考过程
+- JSON 数组必须在 </thinking> 标签之外
+- 不要在 JSON 外添加任何其他文本`;
+
+  const userPrompt = [
+    `你是一个审查员，人格设定：${persona}`,
+    "请审查以下 PRD 文档，找出其中的风险点。",
+    "对于每个风险点：1) 写清问题描述；2) 判断应该 @谁 (UI设计/后端开发/产品经理)；3) 必须从 PRD 中**原样复制**被评论的那一句或一小段原文，作为 quoted_text（用于文档内定位与高亮）。",
+    "",
+    "PRD 文档内容：",
+    prdText,
+  ].join("\n");
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  // 5. 调用流式 AI
+  yield* callAIStream(messages, { temperature, max_tokens: 4096 });
+  logStep("流式审查完成");
 }
 
 /**
@@ -1296,6 +1425,7 @@ module.exports = {
   // 核心函数
   callAI,
   reviewDocument,
+  reviewDocumentStream, // 流式审查文档（Chain-of-Thought + SSE）
   replyToComment,
   chat,
   generatePRD,         // 生成 PRD 文档

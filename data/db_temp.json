@@ -1,0 +1,132 @@
+{
+  "project_context": {
+    "prd_text": "关于 AI 企业积分对白名单客户收费调整的公告\n\n尊敬的 MasterGo AI 用户，您好！\n\n非常感谢您一直以来对我们服务的信任与支持。随着 AI 技术的不断提升，为了持续为您提供更优质、稳定且富有创新性的 AI 快搭和 AI 设计助手应用服务，我们将对 AI 企业积分收费策略由免费试用正式进入付费商用。\n\n为了进一步加大在 AI 快搭和 AI 设计助手技术研发上的投入，提升输出物的准确性、优化模型的性能，确保您能获得行业领先的 AI 服务体验。经过全面评估与慎重考虑，我们决定对白名单客户的 AI 企业积分收费进行调整。\n\n自 2026 年 2 月 26 日起，AI 企业积分将正式从免费试用模式转变为基于应用场景的收费模式，具体收费规则如下：\n\n0分/次 | 0分/次\n\n在 2026 年 1 月 26 日至 2026 年 2 月 25 日期间，您仍可免费使用 AI 快搭和 AI 设计助手。\n\n对于在调整生效前已购买且尚未使用完的 AI 积分，不影响您的正常使用。\n\n若您希望持续使用 AI 快搭和 AI 设计助手产品，可购买 AI 企业积分套餐。具体信息，您可以联系客户经理，获取专属折扣优惠。",
+    "prd_file_path": "",
+    "file_name": "",
+    "updated_at": "2026-02-09T03:17:29.321Z"
+  },
+  "project_meta": {
+    "project_name": "BizAgent AI 协作平台",
+    "version": "1.0.0",
+    "progress": "开发阶段 (45%)",
+    "stakeholders": {
+      "client": "张总 (CTO)",
+      "vendor": "李工 (PM)"
+    },
+    "current_stage": "API 接口开发与联调"
+  },
+  "personas": {
+    "client": "挑剔技术总监",
+    "vendor": "卑微项目经理"
+  },
+  "client_ai_config": {
+    "cognitive_engine": {
+      "thinking_budget": 0.7,
+      "self_reflection_loops": 3
+    },
+    "grounding": {
+      "strictness": 0.6,
+      "context_project_code": true,
+      "context_arch_doc": false,
+      "context_web_search": false
+    },
+    "agency": {
+      "code_sandbox_enabled": false,
+      "output_format": "markdown_report"
+    },
+    "reviewer_mode": {
+      "focus": [
+        "逻辑漏洞",
+        "合规风险",
+        "歧义表达"
+      ],
+      "strictness": 0.6
+    },
+    "replier_mode": {
+      "stance": "discuss",
+      "grounding_doc": true,
+      "grounding_sop": false
+    }
+  },
+  "vendor_ai_config": {
+    "cognitive_engine": {
+      "thinking_budget": 0.4,
+      "self_reflection_loops": 1
+    },
+    "grounding": {
+      "strictness": 0.4,
+      "context_project_code": true,
+      "context_arch_doc": true,
+      "context_web_search": false
+    },
+    "agency": {
+      "code_sandbox_enabled": false,
+      "output_format": "markdown_report"
+    },
+    "reviewer_mode": {
+      "focus": [
+        "逻辑漏洞",
+        "合规风险"
+      ],
+      "strictness": 0.4
+    },
+    "replier_mode": {
+      "stance": "discuss",
+      "grounding_doc": true,
+      "grounding_sop": false
+    }
+  },
+  "model_config": {
+    "provider": "kimi",
+    "ollama": {
+      "baseURL": "http://localhost:11434/v1",
+      "rawBaseURL": "http://localhost:11434",
+      "model": "qwen3-vl:8b"
+    },
+    "kimi": {
+      "model": "moonshot-v1-128k",
+      "apiKey": ""
+    }
+  },
+  "comments": [
+    {
+      "id": "comment_1770607052345_8365",
+      "author_type": "AI_CLIENT",
+      "content": "【风险点1】SAAS 团队版定价25积分/次，但未说明积分获取方式和成本测算依据，可能导致客户对价值认知不足。建议补充积分价值说明和ROI计算案例。",
+      "target_user_id": "产品经理",
+      "quoted_text": "SAAS 团队版 25积分/次",
+      "target_id": "ui-price-card",
+      "reply_content": "",
+      "reply_author_type": null,
+      "created_at": "2026-02-09T03:17:32.345Z"
+    },
+    {
+      "id": "comment_1770607052345_4327",
+      "author_type": "AI_CLIENT",
+      "content": "【风险点2】免费缓冲期至2026年2月25日，但未明确过渡期间的积分消耗是否计入正式账单周期，可能引发客户争议。",
+      "target_user_id": "后端开发",
+      "quoted_text": "在 2026 年 1 月 26 日至 2026 年 2 月 25 日期间，您仍可免费使用 AI 快搭和 AI 设计助手",
+      "target_id": "comment_1769941481927_3427",
+      "reply_content": "",
+      "reply_author_type": null,
+      "created_at": "2026-02-09T03:17:32.345Z"
+    },
+    {
+      "id": "comment_1770607052345_6937",
+      "author_type": "AI_CLIENT",
+      "content": "【风险点3】性能优化功能显示0分/次，但未说明是永久免费还是限时优惠，可能在后续版本变更时引发客户投诉。",
+      "target_user_id": "产品经理",
+      "quoted_text": "性能优化 0分/次",
+      "target_id": "comment_1769941481927_1241",
+      "reply_content": "",
+      "reply_author_type": null,
+      "created_at": "2026-02-09T03:17:32.345Z"
+    }
+  ],
+  "client_chat_sessions": [],
+  "vendor_chat_sessions": [],
+  "current_client_session_id": null,
+  "current_vendor_session_id": null,
+  "client_chat_messages": [],
+  "vendor_chat_messages": []
+}

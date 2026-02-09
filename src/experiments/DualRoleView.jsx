@@ -820,6 +820,9 @@ Name: ${comment.user}
                     ref={sidebarRef}
                     currentRole={currentRole}
                     onTriggerAiReview={handleAiAnalysisComplete}
+                    onWidgetClick={(type, data) => {
+                        alert('✅ Debug: Clicked widget type: ' + type + '\nData ID: ' + (data?.id || data?.title || 'N/A'));
+                    }}
                 />
 
                 {/* --- Column 2: Document/Prototype View --- */}

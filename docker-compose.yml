@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  biz-agent-backend:
+    container_name: biz_agent_backend_v2
+    build: .
+    ports:
+      # 左边 3002 是对外大门，右边 3001 是对内房门
+      - "3002:3001"
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+    restart: unless-stopped
