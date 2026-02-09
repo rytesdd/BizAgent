@@ -18,6 +18,7 @@ import KeyPersonCard from './cards/KeyPersonCard';
 import NotificationCard from './cards/NotificationCard';
 import FeatureListCard from './cards/FeatureListCard';
 import TodoCard from './cards/TodoCard';
+import AlertCard from './cards/AlertCard';
 
 
 /**
@@ -30,6 +31,7 @@ const WIDGET_COMPONENTS = {
     notification: NotificationCard,
     feature_list: FeatureListCard,
     todo: TodoCard,
+    alert: AlertCard,
 };
 
 /**
@@ -39,7 +41,7 @@ const MarkdownBlock = ({ content }) => {
     if (!content) return null;
 
     return (
-        <div className="prose prose-sm prose-invert max-w-none">
+        <div className="prose prose-sm prose-invert max-w-none overflow-hidden">
             <ReactMarkdown
                 rehypePlugins={[rehypeRaw]}
                 components={{
@@ -230,8 +232,12 @@ const renderContentBlock = (block, index, onWidgetClick) => {
             );
 
         default:
-            console.warn('[MessageRenderer] Unknown block type:', block.type);
-            return null;
+            // Attempt to render as a standalone widget
+            return (
+                <div key={`block-widget-${index}`} className="content-block-widget my-2">
+                    {renderWidget(block, index, onWidgetClick)}
+                </div>
+            );
     }
 };
 
@@ -277,7 +283,7 @@ const MessageRenderer = ({
 
             {/* Widgets (legacy format) */}
             {widgets && widgets.length > 0 && (
-                <div className="widgets-container mt-3 space-y-2">
+                <div className="widgets-container mt-3 space-y-2 overflow-hidden">
                     {widgets.map((widget, index) => renderWidget(widget, index, onWidgetClick))}
                 </div>
             )}

@@ -68,3 +68,41 @@ export async function runConnectionTest() {
         throw error;
     }
 }
+/**
+ * Sends a message to the Persona Chat API (Narrative Engine).
+ * @param {Array} messages - Message history
+ * @param {string} persona - 'vendor' | 'client'
+ * @param {Object} config - { role, goal, tone }
+ * @returns {Promise<Object>} - { widgets: [], ... }
+ */
+export async function sendPersonaChat(messages, persona, config) {
+    try {
+        const response = await fetch('/api/ai/persona-chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                messages: messages,
+                persona: persona,
+                persona_config: config
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `API Request Failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+            return data.data; // Returns { widgets: [...], _debug: ... }
+        }
+
+        throw new Error("Invalid response format");
+    } catch (error) {
+        console.error("Error calling Persona Chat API:", error);
+        throw error;
+    }
+}

@@ -12,6 +12,7 @@
 
 const db = require("../utils/db");
 const aiService = require("../../services/aiService");
+const personaPrompts = require("../prompts/personaPrompts");
 
 // ============================================
 // 日志工具
@@ -918,6 +919,91 @@ async function autoReplyStream(req, res) {
     res.end();
 }
 
+/**
+ * 智能人设对话 - 双面人设 (Narrative Engine + Widgets)
+ * POST /api/ai/persona-chat
+ */
+async function personaChat(req, res) {
+    try {
+        const { messages, persona, persona_config } = req.body || {};
+
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "messages 参数无效"
+            });
+        }
+
+        const validPersonas = Object.values(personaPrompts.PERSONA_TYPES);
+        const targetPersona = validPersonas.includes(persona) ? persona : personaPrompts.PERSONA_TYPES.VENDOR;
+
+        // 获取项目上下文
+        const dbData = db.read();
+        const projectContext = {
+            project_name: dbData.project_meta?.project_name,
+            current_stage: dbData.project_meta?.current_stage,
+            progress: dbData.project_meta?.progress,
+            has_prd: !!dbData.project_context?.prd_text,
+        };
+
+        // 构建系统提示词 (含自定义配置)
+        const systemPrompt = personaPrompts.buildPersonaSystemPrompt(
+            targetPersona,
+            projectContext,
+            persona_config
+        );
+
+        // 构造消息列表
+        const chatMessages = [
+            { role: "system", content: systemPrompt },
+            ...messages
+        ];
+
+        logStep(`Persona Chat [${targetPersona}]`, {
+            messageCount: messages.length,
+            hasConfig: !!persona_config
+        });
+
+        // 调用 AI
+        const aiResponse = await aiService.callAI(chatMessages, {
+            temperature: 0.7, // 稍微高一点的温度以增加叙事丰富性
+            max_tokens: 4096,
+        });
+
+        // 解析 Widget 响应
+        const parseResult = personaPrompts.parseWidgetResponse(aiResponse, targetPersona);
+
+        if (!parseResult.success) {
+            logStep("Persona Chat 解析失败 - 降级为文本", { error: parseResult.error });
+            // 如果解析失败，尝试作为纯文本 Markdown 返回
+            return res.json({
+                success: true,
+                data: {
+                    widgets: [
+                        { type: 'markdown', content: aiResponse }
+                    ],
+                    _debug: { raw: aiResponse, error: parseResult.error }
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                widgets: parseResult.widgets,
+                _debug: { raw: aiResponse }
+            }
+        });
+
+    } catch (error) {
+        logStep("Persona Chat 失败", { error: String(error) });
+        res.status(500).json({
+            success: false,
+            error: error.message || String(error)
+        });
+    }
+}
+
 // ============================================
 // 导出
 // ============================================
@@ -929,4 +1015,5 @@ module.exports = {
     vendorReply,
     autoReply,
     autoReplyStream,
+    personaChat,
 };

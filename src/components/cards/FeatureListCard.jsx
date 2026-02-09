@@ -115,14 +115,31 @@ const FeatureListCard = ({ data }) => {
                         <span className="text-xs text-zinc-500">Core Features</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                        {core_features.map((feature, index) => (
-                            <span
-                                key={index}
-                                className="text-xs px-2 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/20"
-                            >
-                                {feature}
-                            </span>
-                        ))}
+                        {core_features.map((feature, index) => {
+                            // 支持两种格式：字符串或对象 {name, status}
+                            const isObject = typeof feature === 'object' && feature !== null;
+                            const featureName = isObject ? feature.name : feature;
+                            const featureStatus = isObject ? feature.status : null;
+
+                            // 根据 status 决定颜色
+                            let colorClass = 'bg-blue-500/20 text-blue-300 border-blue-500/20';
+                            if (featureStatus === 'match') {
+                                colorClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/20';
+                            } else if (featureStatus === 'partial') {
+                                colorClass = 'bg-amber-500/20 text-amber-300 border-amber-500/20';
+                            } else if (featureStatus === 'gap') {
+                                colorClass = 'bg-red-500/20 text-red-300 border-red-500/20';
+                            }
+
+                            return (
+                                <span
+                                    key={index}
+                                    className={`text-xs px-2 py-1 rounded-md border ${colorClass}`}
+                                >
+                                    {featureName}
+                                </span>
+                            );
+                        })}
                     </div>
                 </div>
             )}

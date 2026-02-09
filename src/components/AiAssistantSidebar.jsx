@@ -13,6 +13,18 @@ import { reviewDocumentStream } from '../services/reviewService';
 import { DOCUMENT_CONTENT } from '../data/documentModel';
 import ThinkingAccordion from './ThinkingAccordion';
 import MessageRenderer from './MessageRenderer';
+import AiPersonaConfigModal from './AiPersonaConfigModal';
+import { sendPersonaChat } from '../services/kimiService';
+
+// ==========================================
+// Icon Components
+// ==========================================
+const IconSettings = (props) => (
+    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+);
 
 // ==========================================
 // AI Avatar Component
@@ -78,6 +90,13 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
 
     const [loading, setLoading] = useState(false);
     const [inputValue, setInputValue] = useState('');
+
+    // Persona Config State
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [personaConfig, setPersonaConfig] = useState({
+        vendor: {},
+        client: {}
+    });
 
     // 流式审查状态
     const [isReviewing, setIsReviewing] = useState(false);
@@ -442,8 +461,63 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                 return;
             }
 
-            // --- NORMAL CHAT MODE (Non-Streaming) ---
-            // NORMAL CHAT MODE (With Intent Recognition)
+            // --- NORMAL CHAT MODE (Use Persona Engine) ---
+            // If not auto-review, use the new Persona Engine
+            if (!isAutoReview) {
+                const currentPersona = currentRole === 'PARTY_A' ? 'client' : 'vendor';
+                const currentConfig = personaConfig[currentPersona];
+
+                // Build simple history for backend
+                const historyForBackend = messages
+                    .filter(m => m.role === 'user' || m.role === 'ai')
+                    .slice(-10)
+                    .map(m => ({
+                        role: m.role === 'ai' ? 'assistant' : 'user',
+                        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+                    }));
+
+                // Add current user prompt
+                historyForBackend.push({ role: 'user', content: userPrompt });
+
+                // Call Persona Chat API
+                const data = await sendPersonaChat(
+                    historyForBackend,
+                    currentPersona,
+                    currentConfig
+                );
+
+                // Parse response: extract markdown content and widgets
+                const responseWidgets = data.widgets || [];
+                let contentBlocks = [];
+                let fallbackContent = "";
+
+                // Use the mixed stream (Narrative Engine)
+                if (responseWidgets.length > 0) {
+                    contentBlocks = responseWidgets;
+                } else if (data._debug?.raw) {
+                    // Fallback if no widgets parsed but raw text exists
+                    fallbackContent = data._debug.raw;
+                }
+
+                setMessages(prev => prev.map(msg =>
+                    msg.key === aiMessageId
+                        ? {
+                            ...msg,
+                            isThinking: false,
+                            contentBlocks: contentBlocks, // MIXED STREAM: Text + Cards interleaved
+                            content: fallbackContent,     // Legacy fallback
+                            widgets: [],                  // Clear legacy widgets to avoid duplication
+                            thoughtContent: "",
+                        }
+                        : msg
+                ));
+
+                setLoading(false);
+                return;
+            }
+
+            // --- LEGACY AUTO REVIEW LOGIC BELOW (Only if isAutoReview is true) ---
+
             systemInstruction = `你是一个专业的 AI 助手，正在帮助用户进行文档审查和项目协作。
 你的知识库中已经包含了当前 PRD 文档的内容。
 
@@ -625,6 +699,11 @@ ${reviewInstructions}
         }
     };
 
+    const handleConfigSave = (newConfig) => {
+        setPersonaConfig(newConfig);
+        console.log('[AiAssistant] Persona Config Saved:', newConfig);
+    };
+
     // --- Bubble Render Config ---
     // --- Bubble Render Config ---
     const renderBubbleContent = (msg) => {
@@ -693,7 +772,21 @@ ${reviewInstructions}
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="font-semibold text-zinc-100">BizAgent</span>
                     </div>
+                    <button
+                        onClick={() => setIsConfigOpen(true)}
+                        className="p-2 -mr-2 text-zinc-400 hover:text-zinc-100 transition-colors rounded-full hover:bg-zinc-800"
+                        title="AI 人设配置"
+                    >
+                        <IconSettings className="w-5 h-5" />
+                    </button>
                 </div>
+
+                <AiPersonaConfigModal
+                    isOpen={isConfigOpen}
+                    onClose={() => setIsConfigOpen(false)}
+                    onSave={handleConfigSave}
+                    initialConfig={personaConfig}
+                />
 
                 {/* --- Message List (Scrollable) --- */}
                 <div
@@ -716,13 +809,14 @@ ${reviewInstructions}
                                     content: {
                                         // AI messages: full width, no max constraint
                                         // User messages: compact with max width
-                                        maxWidth: msg.role === 'user' ? '220px' : 'none',
+                                        maxWidth: msg.role === 'user' ? '220px' : '100%',
                                         width: msg.role === 'user' ? 'auto' : '100%',
                                         background: msg.role === 'user' ? '#3f3f46' : 'transparent',
                                         border: msg.role === 'user' ? '1px solid #52525b' : 'none',
                                         borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
                                         padding: msg.role === 'user' ? '12px 16px' : '0',
                                         color: '#e4e4e7',
+                                        overflow: 'hidden', // 防止内容溢出
                                     }
                                 }}
                             />
@@ -742,59 +836,38 @@ ${reviewInstructions}
                     boxSizing: 'border-box',
                     flexShrink: 0,
                 }}>
-                    {/* 按钮区域 - 已隐藏，功能可通过语义触发 */}
-                    <div style={{
-                        flexShrink: 0,
-                        width: '100%',
-                        display: 'none', // 隐藏按钮区域，保留代码便于恢复
-                        alignItems: 'center',
-                        paddingBottom: '10px',
-                        boxSizing: 'border-box',
-                    }}>
+                    {/* 快捷指令区域 - 纯文字自适应标签风格 */}
+                    <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
+                        {/* 1. 全套分析 */}
                         <button
-                            style={{
-                                height: '28px',
-                                borderRadius: '999px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '5px 16px',
-                                background: '#1F1F1F',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'background-color 0.2s ease',
-                            }}
-                            onMouseEnter={(e) => e.target.style.background = '#2a2a2a'}
-                            onMouseLeave={(e) => e.target.style.background = '#1F1F1F'}
-                            onClick={() => {
-                                console.log('[AiAssistantSidebar] 虚拟代理自动审查 clicked');
-                                if (onTriggerAiReview) {
-                                    // With the new logic we set handleSend(null, true) inside.
-                                    // But onTriggerAiReview passed from parent is the OLD handleAiReview.
-                                    // We want to trigger OUR internal review.
-                                    // Wait, if I click THIS button, I want to trigger the internal sidebar logic.
-                                    // BUT, the button 'onTriggerAiReview' is passed from parent.
-                                    // If parent passed 'handleAiReview' (the legacy one), we shouldn't use it if we want the NEW logic.
-                                    // Actually, the plan is to link the TOP button in DualRoleView to THIS component.
-                                    // THIS button inside the sidebar is "Virtual Agent Auto Review".
-                                    // Let's call the internal handleSend(null, true) directly here.
-                                    // And MAYBE call onTriggerAiReview if we still want to support legacy side-effects?
-                                    // No, let's switch to internal logic primarily.
-                                    handleSend(null, true);
-                                } else {
-                                    handleSend(null, true);
-                                }
-                            }}
+                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false)}
+                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
                         >
-                            <span style={{
-                                whiteSpace: 'nowrap',
-                                color: 'rgba(255, 255, 255, 0.85)',
-                                fontFamily: 'PingFang SC, -apple-system, sans-serif',
-                                fontSize: '12px',
-                                lineHeight: '18px',
-                                fontWeight: 400,
-                            }}>
-                                虚拟代理自动审查
-                            </span>
+                            全套分析
+                        </button>
+
+                        {/* 2. 看赢单率 */}
+                        <button
+                            onClick={() => handleSend("这个项目的赢面大吗？此时的ROI是多少？", false)}
+                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                        >
+                            看赢单率
+                        </button>
+
+                        {/* 3. 看风险 */}
+                        <button
+                            onClick={() => handleSend("现在有什么紧急风险需要我注意的吗？", false)}
+                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                        >
+                            看风险
+                        </button>
+
+                        {/* 4. 看关键人 */}
+                        <button
+                            onClick={() => handleSend("谁是这个项目的关键决策人？我们要怎么搞定他？", false)}
+                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                        >
+                            看关键人
                         </button>
                     </div>
 

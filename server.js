@@ -163,6 +163,7 @@ app.get("/api/ai/ollama-models", async (req, res) => {
 // ============================================
 
 app.post("/api/ai/chat", aiController.chat);
+app.post("/api/ai/persona-chat", aiController.personaChat);
 
 // ============================================
 // API: 文件解析状态
