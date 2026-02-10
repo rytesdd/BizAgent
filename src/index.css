@@ -83,66 +83,77 @@ body {
 }
 
 /* ==== Custom Sender Input Styles ==== */
-/*
-  旧代码已注释，重新编写
-*/
 
-/* 主容器样式 */
+/* 主容器：去掉 CSS-in-JS 默认的边框和阴影（内联 style 控制背景和圆角） */
 .chat-panel-dark .ant-sender {
-  background: transparent !important;
-  border: none !important;
   box-shadow: none !important;
 }
 
-/* 所有子元素透明无边框 */
-.chat-panel-dark .ant-sender-content,
-.chat-panel-dark .ant-sender-input-wrapper,
-.chat-panel-dark .ant-input-affix-wrapper {
+/* 内容区：透明无边框，让内联 styles.content 生效 */
+.chat-panel-dark .ant-sender-content {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
 }
 
-/* 文本区域 */
-.chat-panel-dark .ant-sender textarea.ant-input {
+/* 文本区域：透明背景，白色文字 */
+.chat-panel-dark .ant-sender .ant-sender-input {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   color: #e4e4e7 !important;
-  padding: 12px 16px !important;
   font-size: 12px !important;
   line-height: 20px !important;
   resize: none !important;
 }
 
-.chat-panel-dark .ant-sender textarea.ant-input::placeholder {
+.chat-panel-dark .ant-sender .ant-sender-input::placeholder {
   color: rgba(255, 255, 255, 0.45) !important;
 }
 
 /* 移除聚焦光晕 */
-.chat-panel-dark .ant-sender:focus-within,
-.chat-panel-dark .ant-input-affix-wrapper:focus,
-.chat-panel-dark .ant-input-affix-wrapper:focus-within {
+.chat-panel-dark .ant-sender:focus-within {
   box-shadow: none !important;
-  border: none !important;
   outline: none !important;
 }
 
-/* 发送按钮：绝对定位到输入框容器的 right:16px bottom:12px */
-.chat-panel-dark>.ant-sender .ant-sender-actions {
+/* 发送按钮容器：绝对定位到右下角（注意正确类名是 actions-list） */
+.chat-panel-dark .ant-sender .ant-sender-actions-list {
   position: absolute !important;
-  inset: auto 16px 12px auto !important;
+  bottom: 10px !important;
+  right: 16px !important;
   z-index: 100 !important;
+  margin: 0 !important;
 }
 
-/* 按钮样式：32px 圆形 */
+/* 发送按钮：32px 圆形 */
 .chat-panel-dark .ant-sender-actions-btn {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
   border-radius: 50% !important;
   padding: 0 !important;
+  transition: background 0.2s ease, opacity 0.2s ease !important;
+}
+
+/* 发送按钮禁用态：灰暗 */
+.chat-panel-dark .ant-sender-actions-btn.ant-sender-actions-btn-disabled {
+  background: #3f3f46 !important;
+  color: #71717a !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* 发送按钮激活态：蓝色 */
+.chat-panel-dark .ant-sender-actions-btn:not(.ant-sender-actions-btn-disabled) {
+  background: #3B82F6 !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.chat-panel-dark .ant-sender-actions-btn:not(.ant-sender-actions-btn-disabled):hover {
+  background: #2563eb !important;
 }
 
 /* 按钮图标：16px */

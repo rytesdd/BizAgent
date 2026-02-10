@@ -322,6 +322,7 @@ const WIDGET_TYPES = {
     KEY_PERSON: 'key_person',
     FEATURE_LIST: 'feature_list',
     TODO: 'todo',
+    GATEWAY: 'gateway',
 };
 
 /**
@@ -503,7 +504,19 @@ function parseWidgetResponse(response, persona = 'client', intent = 'full') {
         }
         widgets.push({ type: template.type, data: mergedData });
 
-        console.log(`[parseWidgetResponse] Single intent ${intent} done.`);
+        // 注入 Gateway 卡片 —— 点击后前端展开文档区域
+        widgets.push({
+            type: 'gateway',
+            data: {
+                id: 'prd-document',
+                icon: 'document',
+                title: '查看 PRD 文档',
+                summary: '点击查看完整项目文档，对照分析结果',
+                tag: '文档'
+            }
+        });
+
+        console.log(`[parseWidgetResponse] Single intent ${intent} done (with gateway).`);
         return { success: true, widgets };
     }
 
@@ -632,7 +645,19 @@ function parseWidgetResponse(response, persona = 'client', intent = 'full') {
             widgets.push({ type: 'markdown', content: parts.slice(4).join('\n\n') });
         }
 
-        console.log(`[parseWidgetResponse] VENDOR Success. Processed 4 sections with template cards.`);
+        // 注入 Gateway 卡片 —— 点击后前端展开文档区域
+        widgets.push({
+            type: 'gateway',
+            data: {
+                id: 'prd-document',
+                icon: 'document',
+                title: '查看 PRD 文档',
+                summary: '点击查看完整项目文档，包含需求详情与计费方案原型',
+                tag: '文档'
+            }
+        });
+
+        console.log(`[parseWidgetResponse] VENDOR Success. Processed 4 sections with template cards + gateway.`);
         return { success: true, widgets };
     }
 

@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Bubble, Sender } from '@ant-design/x';
 import { ConfigProvider, theme } from 'antd';
 import { sendMessageToKimi } from '../services/kimiService';
@@ -15,6 +16,7 @@ import ThinkingAccordion from './ThinkingAccordion';
 import MessageRenderer from './MessageRenderer';
 import AiPersonaConfigModal from './AiPersonaConfigModal';
 import { sendPersonaChat } from '../services/kimiService';
+import { useChatStore } from '../store/chatStore';
 
 // ==========================================
 // Icon Components
@@ -67,40 +69,39 @@ const ThinkingIndicator = () => (
 // ==========================================
 // Main Component
 // ==========================================
-const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A', onWidgetClick, onDocumentOpen }, ref) => {
-    // --- State: 独立的消息状态（甲方/乙方隔离）---
-    const [clientMessages, setClientMessages] = useState([
-        {
-            key: 'welcome_client',
-            role: 'ai',
-            content: '你好！我是你的 BizAgent 业务助手。有什么可以帮助你的吗？'
-        }
-    ]);
-    const [vendorMessages, setVendorMessages] = useState([
-        {
-            key: 'welcome_vendor',
-            role: 'ai',
-            content: '你好！我是你的 BizAgent 业务助手。有什么可以帮助你的吗？'
-        }
-    ]);
+const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A', onWidgetClick, onDocumentOpen, isSidebar = false }, ref) => {
+    // --- State: 使用 zustand store 管理聊天状态（解决组件卸载重挂状态丢失问题）---
+    const {
+        clientMessages,
+        setClientMessages,
+        vendorMessages,
+        setVendorMessages,
+        loading,
+        setLoading,
+        inputValue,
+        setInputValue,
+        isReviewing,
+        setIsReviewing,
+        thinkingLog,
+        setThinkingLog,
+    } = useChatStore();
 
     // 根据当前角色动态选择消息状态
-    const messages = currentRole === 'PARTY_A' ? clientMessages : vendorMessages;
+    const messages = (currentRole === 'PARTY_A' ? clientMessages : vendorMessages) || [];
     const setMessages = currentRole === 'PARTY_A' ? setClientMessages : setVendorMessages;
 
-    const [loading, setLoading] = useState(false);
-    const [inputValue, setInputValue] = useState('');
+    // 是否已发送过消息（控制输入框居中→底部动画，每个窗口独立）
+    const [hasInteracted, setHasInteracted] = useState(false);
+    const showCentered = !hasInteracted && !isSidebar;
 
-    // Persona Config State
+    // Persona Config State (局部 UI 状态，不需要持久化)
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [personaConfig, setPersonaConfig] = useState({
         vendor: {},
         client: {}
     });
 
-    // 流式审查状态
-    const [isReviewing, setIsReviewing] = useState(false);
-    const [thinkingLog, setThinkingLog] = useState('');
+    // Refs
     const abortControllerRef = useRef(null);
 
     const scrollRef = useRef(null);
@@ -296,6 +297,7 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
             };
 
             setInputValue('');
+            if (!hasInteracted) setHasInteracted(true);
             setMessages(prev => [...prev,
             { key: `user_${Date.now()}`, role: 'user', content: '/test_cards' },
                 mockNarrativeMessage
@@ -317,6 +319,7 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
 
         setMessages(prev => [...prev, userMessage]);
         if (!isAutoReview) setInputValue('');
+        if (!hasInteracted) setHasInteracted(true);
         setLoading(true);
 
         // Pre-create AI message to stream/update thought
@@ -772,7 +775,7 @@ ${reviewInstructions}
             theme={{
                 algorithm: theme.darkAlgorithm,
                 token: {
-                    colorPrimary: '#4F4F4F', // Dark Grey
+                    colorPrimary: '#3B82F6', // Blue - makes send button visually active
                     colorBgContainer: '#27272a',
                     colorBgElevated: '#3f3f46',
                     colorText: '#e4e4e7',
@@ -790,9 +793,10 @@ ${reviewInstructions}
                 }
             }}
         >
-            <div className="w-full h-full flex flex-col bg-zinc-900 rounded-xl overflow-hidden chat-panel-dark">
+            <LayoutGroup>
+            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden chat-panel-dark">
                 {/* --- Header --- */}
-                <div className="h-14 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
+                <div className="h-14 flex items-center justify-between px-4 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="font-semibold text-zinc-100">BizAgent</span>
@@ -813,137 +817,220 @@ ${reviewInstructions}
                     initialConfig={personaConfig}
                 />
 
-                {/* --- Message List (Scrollable) --- */}
-                <div
-                    ref={scrollRef}
-                    className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
-                >
-                    {messages.map((msg) => (
-                        <div
-                            key={msg.key}
-                            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                {/* ===== 阶段 A：初始态 — 输入框居中 ===== */}
+                {showCentered && (
+                    <div className="flex-1 flex items-center justify-center px-4">
+                        <motion.div
+                            layoutId="chat-input-area"
+                            className="w-full max-w-2xl"
+                            transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
                         >
-                            {/* Avatar - Hide AI Avatar */}
-                            {msg.role === 'ai' ? null : <UserAvatar />}
-
-                            {/* Bubble */}
-                            <Bubble
-                                placement={msg.role === 'user' ? 'end' : 'start'}
-                                content={renderBubbleContent(msg)}
+                            {/* 快捷指令 */}
+                            <div className="flex flex-wrap gap-2 mb-3 w-full">
+                                <button
+                                    onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    全套分析
+                                </button>
+                                <button
+                                    onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看赢单率
+                                </button>
+                                <button
+                                    onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看风险
+                                </button>
+                                <button
+                                    onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看关键人
+                                </button>
+                            </div>
+                            {/* Sender */}
+                            <Sender
+                                loading={loading}
+                                value={inputValue}
+                                onChange={setInputValue}
+                                onSubmit={(v) => handleSend(v, false)}
+                                placeholder="输入或将文件拖至此处..."
+                                className="relative overflow-hidden"
+                                style={{
+                                    height: 64,
+                                    background: '#27272a',
+                                    borderRadius: 20,
+                                    border: '1px solid #3f3f46',
+                                    boxShadow: 'none',
+                                }}
                                 styles={{
                                     content: {
-                                        // AI messages: full width, no max constraint
-                                        // User messages: compact with max width
-                                        maxWidth: msg.role === 'user' ? '220px' : '100%',
-                                        width: msg.role === 'user' ? 'auto' : '100%',
-                                        background: msg.role === 'user' ? '#3f3f46' : 'transparent',
-                                        border: msg.role === 'user' ? '1px solid #52525b' : 'none',
-                                        borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
-                                        padding: msg.role === 'user' ? '12px 16px' : '0',
+                                        height: '100%',
+                                        padding: 0,
+                                        alignItems: 'stretch',
+                                        border: 'none',
+                                        boxShadow: 'none',
+                                    },
+                                    input: {
+                                        height: '100%',
+                                        resize: 'none',
+                                        background: 'transparent',
                                         color: '#e4e4e7',
-                                        overflow: 'hidden', // 防止内容溢出
-                                    }
+                                        padding: '16px 60px 16px 20px',
+                                        border: 'none',
+                                        boxShadow: 'none',
+                                        outline: 'none',
+                                        fontSize: 12,
+                                        lineHeight: '20px',
+                                    },
+                                    suffix: {
+                                        position: 'absolute',
+                                        bottom: 10,
+                                        right: 16,
+                                        margin: 0,
+                                        padding: 0,
+                                    },
                                 }}
                             />
+                        </motion.div>
+                    </div>
+                )}
+
+                {/* ===== 阶段 B：已交互态 — 消息列表 + 输入框在底部 ===== */}
+                {!showCentered && (
+                    <>
+                        {/* --- Message List (Scrollable) --- */}
+                        <div
+                            ref={scrollRef}
+                            className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+                        >
+                            {messages.map((msg) => (
+                                <div
+                                    key={msg.key}
+                                    className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                                >
+                                    {msg.role === 'ai' ? null : <UserAvatar />}
+                                    <Bubble
+                                        placement={msg.role === 'user' ? 'end' : 'start'}
+                                        content={renderBubbleContent(msg)}
+                                        styles={{
+                                            content: {
+                                                maxWidth: msg.role === 'user' ? '220px' : '100%',
+                                                width: msg.role === 'user' ? 'auto' : '100%',
+                                                background: msg.role === 'user' ? '#3f3f46' : 'transparent',
+                                                border: msg.role === 'user' ? '1px solid #52525b' : 'none',
+                                                borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
+                                                padding: msg.role === 'user' ? '12px 16px' : '0',
+                                                color: '#e4e4e7',
+                                                overflow: 'hidden',
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ))}
                         </div>
-                    ))}
 
-
-                </div>
-
-                {/* === Input Area - 自动撑高布局 === */}
-                <div style={{
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '0 16px 16px 16px', // Adjusted padding: 0 top (flush), 16 side/bottom
-                    background: '#101010',
-                    boxSizing: 'border-box',
-                    flexShrink: 0,
-                }}>
-                    {/* 快捷指令区域 - 纯文字自适应标签风格 */}
-                    <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
-                        {/* 1. 全套分析 */}
-                        <button
-                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
-                            disabled={loading}
-                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            全套分析
-                        </button>
-
-                        {/* 2. 看赢单率 */}
-                        <button
-                            onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
-                            disabled={loading}
-                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            看赢单率
-                        </button>
-
-                        {/* 3. 看风险 */}
-                        <button
-                            onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
-                            disabled={loading}
-                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            看风险
-                        </button>
-
-                        {/* 4. 看关键人 */}
-                        <button
-                            onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
-                            disabled={loading}
-                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            看关键人
-                        </button>
-                    </div>
-
-                    {/* 输入框容器 - 固定高度100px */}
-                    <div className="w-full"> {/* Removed redundant padding */}
-                        <Sender
-                            loading={loading}
-                            value={inputValue}
-                            onChange={setInputValue}
-                            onSubmit={(v) => handleSend(v, false)}
-                            placeholder="输入或将文件拖至此处..."
-                            // Force the structure to allow absolute positioning
-                            className="
-                                h-[128px] 
-                                !bg-[#27272a] 
-                                rounded-xl 
-                                border border-zinc-700 
-                                relative 
-                                overflow-hidden
-                                
-                                /* 1. Fix the Input Area (Top-Left Alignment) */
-                                [&_.ant-x-sender-content]:h-full
-                                [&_.ant-x-sender-input]:h-full
-                                [&_textarea]:!h-full
-                                [&_textarea]:!resize-none
-                                [&_textarea]:!bg-transparent
-                                [&_textarea]:!pt-[10px]     /* Top Padding */
-                                [&_textarea]:!pl-[16px]     /* Left Padding */
-                                [&_textarea]:!pr-[60px]     /* Right Padding (Avoid button overlap) */
-                                [&_textarea]:text-zinc-200
-                                [&_textarea]:placeholder:text-zinc-500
-                                
-                                /* 2. Fix the Button Position (Bottom-Right Absolute) */
-                                [&_.ant-x-sender-actions]:absolute
-                                [&_.ant-x-sender-actions]:bottom-[10px]
-                                [&_.ant-x-sender-actions]:right-[16px]
-                                [&_.ant-x-sender-actions]:!m-0
-                            "
-                            // Clean up default Ant styles that might conflict
+                        {/* --- Input Area（底部） --- */}
+                        <motion.div
+                            layoutId="chat-input-area"
                             style={{
-                                '--x-sender-bg': 'transparent',
-                                '--x-sender-border': 'none',
+                                width: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                padding: '0 16px 48px 16px',
+                                boxSizing: 'border-box',
+                                flexShrink: 0,
                             }}
-                        />
-                    </div>
-                </div>
+                            transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
+                        >
+                            {/* 快捷指令 */}
+                            <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
+                                <button
+                                    onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    全套分析
+                                </button>
+                                <button
+                                    onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看赢单率
+                                </button>
+                                <button
+                                    onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看风险
+                                </button>
+                                <button
+                                    onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
+                                    disabled={loading}
+                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    看关键人
+                                </button>
+                            </div>
+                            {/* Sender */}
+                            <Sender
+                                loading={loading}
+                                value={inputValue}
+                                onChange={setInputValue}
+                                onSubmit={(v) => handleSend(v, false)}
+                                placeholder="输入或将文件拖至此处..."
+                                className="relative overflow-hidden"
+                                style={{
+                                    height: 64,
+                                    background: '#27272a',
+                                    borderRadius: 20,
+                                    border: '1px solid #3f3f46',
+                                    boxShadow: 'none',
+                                }}
+                                styles={{
+                                    content: {
+                                        height: '100%',
+                                        padding: 0,
+                                        alignItems: 'stretch',
+                                        border: 'none',
+                                        boxShadow: 'none',
+                                    },
+                                    input: {
+                                        height: '100%',
+                                        resize: 'none',
+                                        background: 'transparent',
+                                        color: '#e4e4e7',
+                                        padding: '16px 60px 16px 20px',
+                                        border: 'none',
+                                        boxShadow: 'none',
+                                        outline: 'none',
+                                        fontSize: 12,
+                                        lineHeight: '20px',
+                                    },
+                                    suffix: {
+                                        position: 'absolute',
+                                        bottom: 10,
+                                        right: 16,
+                                        margin: 0,
+                                        padding: 0,
+                                    },
+                                }}
+                            />
+                        </motion.div>
+                    </>
+                )}
             </div>
+            </LayoutGroup>
         </ConfigProvider>
     );
 }

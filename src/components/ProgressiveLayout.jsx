@@ -110,6 +110,11 @@ export default function ProgressiveLayout({
         setViewStage('chat');
     }, []);
 
+    // 桌面端关闭文档区 → 回到纯聊天
+    const handleCloseDocument = useCallback(() => {
+        setViewStage('chat');
+    }, []);
+
     // 评论卡片点击（包装原回调，移动端需要切换到文档视图）
     const handleCommentClickWrapped = useCallback((id, blockId) => {
         onCommentClick?.(id, blockId);
@@ -252,20 +257,39 @@ export default function ProgressiveLayout({
 
     // ===== 渲染文档区 =====
     const renderDocumentView = () => (
-        <div className="h-full w-full overflow-hidden relative" ref={scrollContainerRef}>
-            <MockSplitView
-                activeCommentId={activeId}
-                activeUiId={comments.find(c => c.id === activeId)?.anchor?.uiRef || null}
-                comments={comments}
-                onTextSelect={onTextSelect}
-                isThinking={false}
-                isReviewing={false}
-                activeSection={null}
-                onSelectElement={handleHighlightClick}
-                isLegacyMode={false}
-                isFallbackActive={false}
-            />
-            {renderToolbar()}
+        <div className="h-full w-full overflow-hidden relative flex flex-col" ref={scrollContainerRef}>
+            {/* 文档区头部（桌面端带关闭按钮） */}
+            {!isMobile && (
+                <div className="h-11 flex items-center justify-between px-4 bg-zinc-900/80 shrink-0 border-b border-zinc-800/50">
+                    <span className="text-sm font-medium text-zinc-300">文档预览</span>
+                    <button
+                        onClick={handleCloseDocument}
+                        className="text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-700"
+                        title="收起文档区"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+            {/* 文档内容 */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+                <MockSplitView
+                    activeCommentId={activeId}
+                    activeUiId={comments.find(c => c.id === activeId)?.anchor?.uiRef || null}
+                    comments={comments}
+                    onTextSelect={onTextSelect}
+                    isThinking={false}
+                    isReviewing={false}
+                    activeSection={null}
+                    onSelectElement={handleHighlightClick}
+                    isLegacyMode={false}
+                    isFallbackActive={false}
+                />
+                {renderToolbar()}
+            </div>
         </div>
     );
 
@@ -309,6 +333,7 @@ export default function ProgressiveLayout({
                                     onTriggerAiReview={handleAiAnalysisComplete}
                                     onWidgetClick={handleWidgetClick}
                                     onDocumentOpen={handleDocumentOpen}
+                                    isSidebar={false}
                                 />
                             </motion.div>
                         )}
@@ -370,6 +395,7 @@ export default function ProgressiveLayout({
                                 onTriggerAiReview={handleAiAnalysisComplete}
                                 onWidgetClick={handleWidgetClick}
                                 onDocumentOpen={handleDocumentOpen}
+                                isSidebar={false}
                             />
                         </div>
                     </motion.div>
@@ -392,6 +418,7 @@ export default function ProgressiveLayout({
                                 onTriggerAiReview={handleAiAnalysisComplete}
                                 onWidgetClick={handleWidgetClick}
                                 onDocumentOpen={handleDocumentOpen}
+                                isSidebar={true}
                             />
                         </motion.div>
 
