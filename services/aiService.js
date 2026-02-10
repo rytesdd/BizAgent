@@ -26,11 +26,14 @@ const AVAILABLE_OLLAMA_MODELS = [
   { value: "qwen3-vl:8b", label: "Qwen3-VL 8B (多模态)", multimodal: true },
 ];
 
-// 可用的 Kimi 模型列表
+// 可用的 Kimi 模型列表（2026-02 从 /v1/models API 获取）
 const AVAILABLE_KIMI_MODELS = [
-  { value: "moonshot-v1-8k", label: "Moonshot 8K" },
-  { value: "moonshot-v1-32k", label: "Moonshot 32K" },
-  { value: "moonshot-v1-128k", label: "Moonshot 128K" },
+  { value: "kimi-k2.5", label: "⭐ Kimi K2.5 (旗舰 256K·推理·多模态)" },
+  { value: "kimi-latest", label: "🌙 Kimi Latest (最新稳定版)" },
+  { value: "kimi-k2-thinking", label: "🧠 Kimi K2 Thinking (深度思考)" },
+  { value: "kimi-k2-thinking-turbo", label: "⚡ Kimi K2 Thinking Turbo (思考加速)" },
+  { value: "moonshot-v1-128k", label: "💾 Moonshot V1 128K (经典版)" },
+  { value: "moonshot-v1-32k", label: "🚀 Moonshot V1 32K (高速版)" },
 ];
 
 // Ollama 默认配置
@@ -40,10 +43,10 @@ const OLLAMA_DEFAULT_CONFIG = {
   model: process.env.OLLAMA_MODEL || "qwen3-vl:8b",
 };
 
-// Kimi (Moonshot) 默认配置（PRD 生成建议用 32k/128k 以容纳长文档，8k 易截断）
+// Kimi (Moonshot) 默认配置（K2.5 支持 256K 上下文，适合长文档 PRD 生成与原型生成）
 const KIMI_DEFAULT_CONFIG = {
   baseURL: "https://api.moonshot.cn/v1",
-  model: process.env.KIMI_MODEL || "moonshot-v1-32k",
+  model: process.env.KIMI_MODEL || "kimi-k2.5",
 };
 
 // ============================================
@@ -1418,6 +1421,60 @@ async function structureDocument(rawText) {
 }
 
 // ============================================
+// 原型生成服务 (New)
+// ============================================
+
+/**
+ * 流式生成 HTML 原型（异步生成器，逐 chunk 产出）
+ * @param {string} prdText - PRD 文档内容
+ * @yields {string} 每个 delta 文本片段
+ */
+async function* generatePrototypeStream(prdText) {
+  logStep("开始流式生成 HTML 原型", { prdLength: prdText.length });
+
+  const systemPrompt = `你是一位世界顶级的前端工程师和 UX 设计师，擅长将需求文档快速转化为高保真的 HTML 原型。
+你的目标是：根据用户提供的 PRD 文档，编写一个**单文件 HTML** 原型。
+
+**核心要求：**
+1. **单文件交付**：HTML、CSS、JS 全部内联在一个 index.html 文件中。
+2. **技术栈**：
+   - 使用 Tailwind CSS (通过 CDN 引入) 进行快速样式开发。
+   - **严禁使用 FontAwesome**（风格过时）。
+   - **推荐使用 Lucide Icons** (通过 <script src="https://unpkg.com/lucide@latest"></script> 引入，并在 HTML 中使用 <i data-lucide="icon-name"></i>，最后调用 lucide.createIcons())，或者直接使用高质量的 SVG 代码。
+   - 使用 Google Fonts (Inter 或 Roboto) 提升字体质感。
+   - 使用包含 vanilla JavaScript 的 <script> 标签实现交互逻辑。
+3. **视觉风格**：
+   - **现代高端**：使用柔和的阴影、圆角、磨砂玻璃效果 (Glassmorphism)、微交互动画。
+   - **配色方案**：根据 PRD 语境自动选择适合的配色（如企业SaaS用蓝色系，C端应用用活力色），支持深色模式 (Dark Mode) 更好。
+   - **布局**：完全响应式，适配移动端和桌面端。
+4. **交互逻辑**：
+   - 按钮要有 Hover 效果和点击反馈。
+   - 导航栏、Tab 切换、模态框 (Modal) 等基础组件必须是可交互的（使用 JS 实现）。
+   - 如果 PRD 提到图表，使用 Canvas 或简单的 CSS 模拟，或者引入 Chart.js (CDN)。
+
+**输出格式：**
+只输出 HTML 代码，不要包含 Markdown 代码块标记（如 \`\`\`html），直接输出 <!DOCTYPE html> 开头的内容。
+`;
+
+  const userPrompt = `请根据以下 PRD 文档内容，设计并生成一个高保真的 HTML/CSS/JS 原型：
+
+---
+${prdText}
+---
+
+请开始编写 HTML 代码：`;
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  // 使用较长的 max_tokens 以确保 HTML 完整生成
+  yield* callAIStream(messages, { temperature: 0.7, max_tokens: 16000 });
+  logStep("流式 HTML 原型生成完成");
+}
+
+// ============================================
 // 导出
 // ============================================
 
@@ -1434,6 +1491,7 @@ module.exports = {
   reformatDocument,       // 用 AI 对文档重新排版（一次性）
   reformatDocumentStream, // 流式重新排版（供 SSE）
   structureDocument,   // PDF 脏数据清洗（断行修复、去噪、结构化 Markdown）
+  generatePrototypeStream, // 流式生成 HTML 原型 (New)
 
   // 配置管理
   getProvider,

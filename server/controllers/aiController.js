@@ -1006,11 +1006,68 @@ async function personaChat(req, res) {
 }
 
 // ============================================
+// 直通 AI 聊天 - 不经过 ReAct Loop，直接转发 messages 给 AI
+// 用于前端需要精确控制 system prompt 的场景（如 JSON 结构化输出）
+// ============================================
+
+/**
+ * 直通 AI 聊天控制器
+ * POST /api/ai/simple-chat
+ * 
+ * 与 /api/ai/chat 的区别：
+ * - /api/ai/chat 会注入 ReAct Agent 系统提示词，走工具调用循环
+ * - /api/ai/simple-chat 直接转发 messages 给 AI，前端完全控制 prompt
+ * 
+ * 适用场景：评论总结、Patch 生成等需要 JSON 结构化输出的功能
+ */
+async function simpleChat(req, res) {
+    try {
+        const { messages } = req.body || {};
+
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "messages 参数无效：需要一个非空的消息数组"
+            });
+        }
+
+        const lastMessage = messages[messages.length - 1]?.content || "";
+        logStep("收到直通聊天请求 (Simple)", {
+            messageCount: messages.length,
+            lastMessage: lastMessage.slice(0, 50)
+        });
+
+        // 直接调用 AI，不经过 ReAct Loop
+        const content = await aiService.callAI(messages, {
+            temperature: 0.3,
+            max_tokens: 4096,
+        });
+
+        logStep("直通聊天响应完成", { contentLength: content?.length });
+
+        res.json({
+            success: true,
+            data: {
+                content,
+            }
+        });
+
+    } catch (error) {
+        logStep("Simple Chat 失败", { error: String(error) });
+        res.status(500).json({
+            success: false,
+            error: error.message || String(error)
+        });
+    }
+}
+
+// ============================================
 // 导出
 // ============================================
 
 module.exports = {
     chat,
+    simpleChat,
     handleComment,
     humanReply,
     vendorReply,

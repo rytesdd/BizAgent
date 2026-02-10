@@ -856,8 +856,8 @@ ${reviewInstructions}
                     boxSizing: 'border-box',
                     flexShrink: 0,
                 }}>
-                    {/* 快捷指令区域 - 纯文字自适应标签风格 */}
-                    <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
+                    {/* 快捷指令区域 - 仅乙方可见 */}
+                    {currentRole === 'PARTY_B' && <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
                         {/* 1. 全套分析 */}
                         <button
                             onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
@@ -893,7 +893,7 @@ ${reviewInstructions}
                         >
                             看关键人
                         </button>
-                    </div>
+                    </div>}
 
                     {/* 输入框容器 - 固定高度100px */}
                     <div className="w-full"> {/* Removed redundant padding */}

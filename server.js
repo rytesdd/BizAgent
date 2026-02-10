@@ -163,6 +163,7 @@ app.get("/api/ai/ollama-models", async (req, res) => {
 // ============================================
 
 app.post("/api/ai/chat", aiController.chat);
+app.post("/api/ai/simple-chat", aiController.simpleChat);
 app.post("/api/ai/persona-chat", aiController.personaChat);
 
 // ============================================
@@ -299,6 +300,115 @@ app.post("/api/prd/reformat", async (req, res) => {
   } catch (error) {
     logStep("PRD 重新整理失败", { error: String(error) });
     res.status(500).json({ success: false, error: error.message || String(error) });
+  }
+});
+
+// ============================================
+// API: 生成 HTML 原型（流式 SSE）
+// ============================================
+
+app.post("/api/prototype/generate", async (req, res) => {
+  try {
+    const data = readDb();
+    const rawText = req.body.prd_text || data.project_context?.prd_text || "";
+
+    if (!rawText.trim()) {
+      return res.status(400).json({ success: false, error: "PRD 内容为空，无法生成原型" });
+    }
+
+    logStep("收到 HTML 原型生成请求", { length: rawText.length });
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    let fullHtml = "";
+
+    try {
+      // 1. 生成并流式返回
+      for await (const chunk of aiService.generatePrototypeStream(rawText)) {
+        // AI 可能返回 markdown 代码块标记，尝试清洗（也可以在 Prompt 约束，但这里双重保险）
+        // 这里暂时保留原始输出，由前端展示或后续处理，或者存文件时清洗
+        // 为了实时展示，直接推流
+        fullHtml += chunk;
+        res.write("data: " + JSON.stringify({ type: "delta", content: chunk }) + "\n\n");
+      }
+
+      // 2. 清洗 Markdown 标记 (只移除首尾的代码块标记)
+      let cleanHtml = fullHtml.trim();
+      if (cleanHtml.startsWith('```')) {
+        // 移除第一行（可能是 ```html 或 ```）
+        cleanHtml = cleanHtml.replace(/^```(?:html)?\s*\n?/, '');
+        // 移除最后的 ```
+        cleanHtml = cleanHtml.replace(/\n?\s*```\s*$/, '');
+      }
+
+      // 3. 保存文件
+      const timestamp = Date.now();
+      const filename = `prototype_${timestamp}.html`;
+      const prototypesDir = path.join(DATA_DIR, "prototypes"); // 确保 server.js 顶部有 DATA_DIR 定义
+
+      // 确保目录存在 (虽然前面建了，但 path.join 可能指向 server/data/prototypes 或 data/prototypes，需确认 paths)
+      // 使用 db.js 导出的 DATA_DIR: data/
+      // 所以路径是 data/prototypes/
+      if (!fs.existsSync(prototypesDir)) {
+        fs.mkdirSync(prototypesDir, { recursive: true });
+      }
+
+      const filePath = path.join(prototypesDir, filename);
+      fs.writeFileSync(filePath, cleanHtml, "utf8");
+
+      logStep("HTML 原型已保存", { filename, size: cleanHtml.length });
+
+      // 4. 返回完成消息 (含文件访问 URL)
+      // 假设提供静态文件服务 /api/file/prototype/:filename
+      const fileUrl = `/api/file/prototype?filename=${filename}`;
+
+      res.write("data: " + JSON.stringify({
+        type: "done",
+        url: fileUrl,
+        filename: filename,
+        fullHtml: cleanHtml
+      }) + "\n\n");
+
+    } catch (streamErr) {
+      logStep("HTML 原型流式生成失败", { error: String(streamErr) });
+      res.write("data: " + JSON.stringify({ type: "error", error: streamErr.message || String(streamErr) }) + "\n\n");
+    }
+
+    res.end();
+  } catch (error) {
+    logStep("HTML 原型生成接口报错", { error: String(error) });
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// API: 获取 HTML 原型文件
+// ============================================
+
+app.get("/api/file/prototype", (req, res) => {
+  try {
+    const filename = req.query.filename;
+    if (!filename) {
+      return res.status(400).send("Missing filename");
+    }
+
+    // 安全检查：只能访问 data/prototypes 下的文件
+    const safeFilename = path.basename(filename);
+    const prototypesDir = path.join(DATA_DIR, "prototypes");
+    const filePath = path.join(prototypesDir, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("Prototype not found");
+    }
+
+    res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    logStep("获取原型文件失败", { error: String(error) });
+    res.status(500).send("Internal Server Error");
   }
 });
 
