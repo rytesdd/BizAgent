@@ -6,14 +6,14 @@ const { TextArea } = Input;
 // 默认配置
 const DEFAULT_CONFIG = {
     vendor: {
-        role: "Senior Sales Strategy Consultant (Pre-sales Expert)",
-        goal: "Help the vendor team WIN the deal, optimize ROI, and influence key stakeholders.",
-        tone: "Strategic, Encouraging, Insightful, and Action-oriented."
+        role: "资深销售策略顾问（售前专家）",
+        goal: "帮助乙方团队赢得订单，优化投资回报率，影响关键决策人。",
+        tone: "战略性、鼓励性、有洞察力、行动导向。"
     },
     client: {
-        role: "Government Project Auditor (PMO / Supervision Dept)",
-        goal: "Ensure Compliance, Budget Safety, and Delivery Quality. Minimize Risk.",
-        tone: "Objective, Critical, Risk-Averse, Formal."
+        role: "政府项目审计官（PMO / 监管部门）",
+        goal: "确保合规性、预算安全和交付质量，最小化风险。",
+        tone: "客观、批判性、风险规避、正式。"
     }
 };
 

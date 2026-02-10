@@ -925,7 +925,7 @@ async function autoReplyStream(req, res) {
  */
 async function personaChat(req, res) {
     try {
-        const { messages, persona, persona_config } = req.body || {};
+        const { messages, persona, persona_config, intent } = req.body || {};
 
         if (!messages || !Array.isArray(messages) || messages.length === 0) {
             return res.status(400).json({
@@ -950,7 +950,8 @@ async function personaChat(req, res) {
         const systemPrompt = personaPrompts.buildPersonaSystemPrompt(
             targetPersona,
             projectContext,
-            persona_config
+            persona_config,
+            intent
         );
 
         // 构造消息列表
@@ -971,7 +972,7 @@ async function personaChat(req, res) {
         });
 
         // 解析 Widget 响应
-        const parseResult = personaPrompts.parseWidgetResponse(aiResponse, targetPersona);
+        const parseResult = personaPrompts.parseWidgetResponse(aiResponse, targetPersona, intent);
 
         if (!parseResult.success) {
             logStep("Persona Chat 解析失败 - 降级为文本", { error: parseResult.error });

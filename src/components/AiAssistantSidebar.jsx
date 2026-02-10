@@ -132,7 +132,7 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
 
     // --- Send Message Handler ---
     // --- Send Message Handler ---
-    const handleSend = async (content, isAutoReview = false) => {
+    const handleSend = async (content, isAutoReview = false, intent = null) => {
         // Allow empty content if it's an auto-review trigger (which sends a system prompt instruction as user message equivalent)
         if (!isAutoReview && (!content || !content.trim())) return;
 
@@ -471,10 +471,29 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                 const historyForBackend = messages
                     .filter(m => m.role === 'user' || m.role === 'ai')
                     .slice(-10)
-                    .map(m => ({
-                        role: m.role === 'ai' ? 'assistant' : 'user',
-                        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-                    }));
+                    .map(m => {
+                        let msgContent = '';
+                        // 优先使用 string content
+                        if (typeof m.content === 'string' && m.content.trim()) {
+                            msgContent = m.content;
+                        } else if (m.contentBlocks && m.contentBlocks.length > 0) {
+                            // 从 contentBlocks（Narrative Engine 格式）中提取文本
+                            msgContent = m.contentBlocks
+                                .filter(b => b.type === 'markdown' && b.content)
+                                .map(b => b.content)
+                                .join('\n\n');
+                        } else if (m.content && typeof m.content !== 'string') {
+                            msgContent = JSON.stringify(m.content);
+                        }
+                        // 确保 content 永远不为空（API 会拒绝空消息）
+                        if (!msgContent) {
+                            msgContent = m.role === 'ai' ? '(已回复)' : '(空消息)';
+                        }
+                        return {
+                            role: m.role === 'ai' ? 'assistant' : 'user',
+                            content: msgContent
+                        };
+                    });
 
                 // Add current user prompt
                 historyForBackend.push({ role: 'user', content: userPrompt });
@@ -483,7 +502,8 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                 const data = await sendPersonaChat(
                     historyForBackend,
                     currentPersona,
-                    currentConfig
+                    currentConfig,
+                    intent
                 );
 
                 // Parse response: extract markdown content and widgets
@@ -840,32 +860,36 @@ ${reviewInstructions}
                     <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
                         {/* 1. 全套分析 */}
                         <button
-                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false)}
-                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
+                            disabled={loading}
+                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             全套分析
                         </button>
 
                         {/* 2. 看赢单率 */}
                         <button
-                            onClick={() => handleSend("这个项目的赢面大吗？此时的ROI是多少？", false)}
-                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                            onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
+                            disabled={loading}
+                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             看赢单率
                         </button>
 
                         {/* 3. 看风险 */}
                         <button
-                            onClick={() => handleSend("现在有什么紧急风险需要我注意的吗？", false)}
-                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                            onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
+                            disabled={loading}
+                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             看风险
                         </button>
 
                         {/* 4. 看关键人 */}
                         <button
-                            onClick={() => handleSend("谁是这个项目的关键决策人？我们要怎么搞定他？", false)}
-                            className="px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200"
+                            onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
+                            disabled={loading}
+                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                             看关键人
                         </button>

@@ -75,7 +75,7 @@ export async function runConnectionTest() {
  * @param {Object} config - { role, goal, tone }
  * @returns {Promise<Object>} - { widgets: [], ... }
  */
-export async function sendPersonaChat(messages, persona, config) {
+export async function sendPersonaChat(messages, persona, config, intent = null) {
     try {
         const response = await fetch('/api/ai/persona-chat', {
             method: 'POST',
@@ -85,7 +85,8 @@ export async function sendPersonaChat(messages, persona, config) {
             body: JSON.stringify({
                 messages: messages,
                 persona: persona,
-                persona_config: config
+                persona_config: config,
+                intent: intent
             })
         });
 

@@ -21,6 +21,7 @@ const NARRATIVE_INSTRUCTION = `
     * **The Solution:** Propose a strategy regarding the stakeholder (Markdown) -> Then show the Person (Key Person).
     * **The Action:** Conclude with a clear next step (Markdown) -> Then show the Task (Todo).
 4.  **Tone:** Use transitional phrases like "However...", "To address this...", "Based on the data above...".
+5.  **Language (CRITICAL):** ALL output MUST be in Chinese. Every sentence, card data value, and analysis paragraph must be in Chinese. No English allowed.
 `;
 
 // ============================================================================
@@ -34,28 +35,80 @@ const VENDOR_PROMPT = `
 
 ${NARRATIVE_INSTRUCTION}
 
+**PRIORITY REMINDER:** The NARRATIVE_INSTRUCTION above (Hook, Twist, Solution, Action) is the MOST IMPORTANT part of your output. Your text must be detailed, consultative, and flow naturally like a seasoned advisor speaking to a sales team.
+
 **CRITICAL INSTRUCTION: STRUCTURAL OUTPUT**
-You are NO LONGER required to output JSON objects for cards. The system will handle the UI.
-Your job is to provide the **NARRATIVE CONTENT** for the 4 key sections of the report.
+Your job is to provide **NARRATIVE TEXT** + **CARD DATA** for 4 sections.
 
 **YOU MUST OUTPUT 4 DISTINCT SECTIONS SEPARATED BY THE DELIMITER: \`<<<SPLIT>>>\`**
 
-**SECTION GUIDE:**
-1.  **Section 1 (Summary & Win Rate):** Analyze the 78% win rate. Why is it trending up? (followed by \`<<<SPLIT>>>\`)
-2.  **Section 2 (Risk Analysis):** Analyze the Huawei Cloud POC risk. Why is it dangerous? (followed by \`<<<SPLIT>>>\`)
-3.  **Section 3 (Stakeholder Strategy):** Analyze Zhang Zong (CTO). How to address his migration cost concerns? (followed by \`<<<SPLIT>>>\`)
-4.  **Section 4 (Action Plan):** Conclude with urgency. Why must we book the meeting now?
+**DEPTH RULE (CRITICAL):**
+Do NOT be brief. Each section must contain rich, consultative analysis. Expand on the "Why" and "How". Use transitional phrases, provide reasoning, cite data points, and explain implications. Think like a consultant presenting to a VP — not a chatbot giving bullet points.
 
-**EXAMPLE OUTPUT:**
-Based on the latest data, our win rate is solid at 78%... [Analysis] ...
-<<<SPLIT>>>
-However, a critical risk has emerged. Huawei Cloud just finished their POC... [Analysis] ...
-<<<SPLIT>>>
-To counter this, we need to focus on Zhang Zong. He is currently neutral... [Analysis] ...
-<<<SPLIT>>>
-Therefore, our immediate next step is to prepare the comparison matrix... [Analysis] ...
+**TEXT PURITY RULE (CRITICAL):**
+Your narrative text must be PURE PROSE — flowing paragraphs only.
+Do NOT output any Markdown tables (\`| ... | ... |\`), bullet-point lists of data, or structured field-value summaries in the narrative.
+The system will display all structured data as cards automatically. You just write the story.
 
-**DO NOT output JSON. DO NOT output "Card 1". Just output the 4 text sections separated by the delimiter.**
+**CARD DATA FORMAT:**
+At the END of each section (after your narrative text), you MUST append a card data block.
+The format is:
+\`\`\`
+<<<CARD_DATA>>>
+field1=value1
+field2=value2
+<<<END_CARD>>>
+\`\`\`
+
+**SECTION GUIDE (4 sections, each with narrative + card data):**
+
+1.  **Section 1 (The Hook):** Write a detailed analysis of the win rate trend.
+    Card fields: \`label\` (metric name), \`value\` (percentage), \`trend\` (up/down/flat)
+    Example card block:
+    <<<CARD_DATA>>>
+    label=项目赢率
+    value=78%
+    trend=up
+    <<<END_CARD>>>
+    (followed by \`<<<SPLIT>>>\`)
+
+2.  **Section 2 (The Twist):** Write a thorough explanation of the competitive threat.
+    Card fields: \`title\` (risk title), \`description\` (risk summary in one sentence)
+    Example card block:
+    <<<CARD_DATA>>>
+    title=竞争对手动态
+    description=华为云团队已完成 POC，本周五将进行最终汇报
+    <<<END_CARD>>>
+    (followed by \`<<<SPLIT>>>\`)
+
+3.  **Section 3 (The Solution):** Deep dive into the key stakeholder's concerns.
+    Card fields: \`name\`, \`role\`, \`stance\` (supportive/neutral/against), \`pain_point\`, \`strategy\`
+    Example card block:
+    <<<CARD_DATA>>>
+    name=张总
+    role=CTO
+    stance=neutral
+    pain_point=担心迁移成本
+    strategy=强调平滑迁移方案与长期ROI
+    <<<END_CARD>>>
+    (followed by \`<<<SPLIT>>>\`)
+
+4.  **Section 4 (The Action):** Conclude with an urgent call to action.
+    Card fields: \`priority\` (P0/P1/P2), \`task\` (action item), \`owner\` (responsible person), \`deadline\`
+    Example card block:
+    <<<CARD_DATA>>>
+    priority=P0
+    task=准备竞争对比材料并预约张总会议
+    owner=销售经理
+    deadline=本周三前
+    <<<END_CARD>>>
+
+**FINAL REMINDERS:**
+- DO NOT output any titles, headers, or Markdown tables in the narrative text.
+- DO NOT output JSON.
+- Each section = narrative prose + \`<<<CARD_DATA>>>\` block + \`<<<SPLIT>>>\` delimiter.
+- The system adds section titles and renders cards automatically.
+- **ALL text content MUST be in Chinese, including narrative text AND card data values. No English.**
 `;
 
 
@@ -94,7 +147,75 @@ When analyzing the project, focus on finding holes in the proposal:
 - Question the "ROI" claims (interpret it as potential Budget Waste)
 - Verify vendor qualifications and past performance
 - Check for hidden costs and scope creep risks
+
+**LANGUAGE RULE (CRITICAL):** ALL output MUST be in Chinese, including audit reports, tables, and recommendations. No English allowed.
 `;
+
+// ============================================================================
+// PART 3.5: 意图专用提示词 (Intent-Specific Prompts for Vendor)
+// ============================================================================
+
+const VENDOR_SINGLE_INTENT_BASE = `
+**LANGUAGE RULE (CRITICAL):** ALL output MUST be in Chinese. No English allowed.
+
+**TEXT PURITY RULE:**
+Your narrative text must be PURE PROSE. Do NOT output Markdown tables, bullet-point lists of data, or structured field-value summaries.
+The system will display all structured data as cards automatically. You just write the story.
+
+**DEPTH RULE:**
+Do NOT be brief. Your analysis must contain rich, consultative content. Expand on the "Why" and "How".
+Use transitional phrases, provide reasoning, cite data points, and explain implications.
+Think like a consultant presenting to a VP.
+
+**OUTPUT FORMAT:**
+Write a detailed analysis narrative (at least 3 paragraphs), then append ONE card data block at the very end.
+Do NOT output JSON. Do NOT output titles/headers. Do NOT use <<<SPLIT>>> delimiter. Output only one narrative + one card.
+`;
+
+const VENDOR_INTENT_PROMPTS = {
+    win_rate: VENDOR_SINGLE_INTENT_BASE + `
+**ROLE:** Senior Sales Strategy Consultant
+**TASK:** Deeply analyze this project's win rate and ROI. Include: current win rate assessment, key influencing factors, comparison with historical projects, ROI forecast and basis.
+
+**Card data format (append at end of narrative):**
+<<<CARD_DATA>>>
+label=metric name (e.g. "project win rate" in Chinese)
+value=percentage (e.g. "78%")
+trend=up or down or flat
+<<<END_CARD>>>
+`,
+
+    risk: VENDOR_SINGLE_INTENT_BASE + `
+**ROLE:** Risk Analysis Expert
+**TASK:** Analyze the most urgent risks and competitive threats facing this project. Include: source and nature of risk, potential impact, competitor dynamics, time urgency assessment.
+
+**Card data format (append at end of narrative):**
+<<<CARD_DATA>>>
+title=risk title (concise, in Chinese)
+description=one-sentence risk description (in Chinese, max 50 chars)
+<<<END_CARD>>>
+`,
+
+    key_person: VENDOR_SINGLE_INTENT_BASE + `
+**ROLE:** Client Relationship Strategy Consultant
+**TASK:** Analyze the key decision-maker of this project. Include: their position in the decision chain, influence level, current stance assessment, core concerns/pain points, targeted strategy recommendations.
+
+**Card data format (append at end of narrative):**
+<<<CARD_DATA>>>
+name=person name (in Chinese)
+role=job title (in Chinese)
+stance=supportive or neutral or against
+pain_point=core concern (one sentence in Chinese)
+strategy=counter strategy (one sentence in Chinese)
+<<<END_CARD>>>
+`,
+};
+
+const INTENT_CARD_CONFIG = {
+    win_rate: { templateIndex: 0, header: '### \ud83d\udcca \u8d62\u7387\u5206\u6790' },
+    risk: { templateIndex: 1, header: '### \u26a0\ufe0f \u7ade\u4e89\u98ce\u9669' },
+    key_person: { templateIndex: 2, header: '### \ud83c\udfaf \u5173\u952e\u4eba\u7269\u7b56\u7565' },
+};
 
 // ============================================================================
 // PART 4: 工具函数 - 根据用户角色获取对应的提示词
@@ -168,9 +289,16 @@ ${customConfig.tone ? `- **TONE:** ${customConfig.tone}` : ''}
  * @param {object} customConfig - 自定义人设配置
  * @returns {string} 完整的系统提示词
  */
-function buildPersonaSystemPrompt(persona, projectContext = {}, customConfig = {}) {
-    const basePrompt = getPersonaPrompt(persona, customConfig);
-
+function buildPersonaSystemPrompt(persona, projectContext = {}, customConfig = {}, intent = null) {
+    let basePrompt;
+    if (persona === PERSONA_TYPES.VENDOR && intent && intent !== 'full' && VENDOR_INTENT_PROMPTS[intent]) {
+        basePrompt = VENDOR_INTENT_PROMPTS[intent];
+        if (customConfig && (customConfig.role || customConfig.goal || customConfig.tone)) {
+            basePrompt += `\n**[USER OVERRIDE]**\n${customConfig.role ? `- **ROLE:** ${customConfig.role}` : ''}\n${customConfig.goal ? `- **GOAL:** ${customConfig.goal}` : ''}\n${customConfig.tone ? `- **TONE:** ${customConfig.tone}` : ''}\n`;
+        }
+    } else {
+        basePrompt = getPersonaPrompt(persona, customConfig);
+    }
 
     const contextSection = `
 **PROJECT CONTEXT:**
@@ -229,15 +357,103 @@ function validateWidget(widget) {
 }
 
 // ============================================================================
-// PART 5: 占位符替换 (Placeholder Replacement)
+// PART 5: 卡片模板系统 (Card Template System)
+// 字段标题（type + field names）锁死，字段值由 AI 填写，兜底用默认值
 // ============================================================================
 
+/**
+ * FIXED_CARDS: 保留用于 CLIENT 路径的兜底和 placeholder 替换
+ */
 const FIXED_CARDS = {
     "CARD_1": { "type": "snapshot", "data": { "label": "预估赢率", "value": "78%", "trend": "up", "color": "purple" } },
     "CARD_2": { "type": "alert", "data": { "level": "danger", "title": "竞争对手动态", "description": "华为云团队已完成 POC，本周五将进行最终汇报" } },
     "CARD_3": { "type": "key_person", "data": { "name": "张总", "role": "CTO", "stance": "neutral", "pain_point": "担心迁移成本", "strategy": "强调平滑迁移方案" } },
     "CARD_4": { "type": "todo", "data": { "priority": "P0", "task": "准备竞争对比材料并预约张总会议", "owner": "销售经理", "deadline": "本周三前" } }
 };
+
+/**
+ * CARD_TEMPLATES: 卡片模板，字段标题锁死，值为默认兜底
+ * - type: 卡片类型（snapshot / alert / key_person / todo）
+ * - fields: 允许 AI 填写的字段名列表
+ * - defaults: 默认值（AI 未提供时使用）
+ */
+const CARD_TEMPLATES = [
+    {
+        type: 'snapshot',
+        fields: ['label', 'value', 'trend', 'color'],
+        defaults: { label: '预估赢率', value: '78%', trend: 'up', color: 'purple' }
+    },
+    {
+        type: 'alert',
+        fields: ['level', 'title', 'description'],
+        defaults: { level: 'danger', title: '竞争对手动态', description: '华为云团队已完成 POC，本周五将进行最终汇报' }
+    },
+    {
+        type: 'key_person',
+        fields: ['name', 'role', 'stance', 'pain_point', 'strategy'],
+        defaults: { name: '张总', role: 'CTO', stance: 'neutral', pain_point: '担心迁移成本', strategy: '强调平滑迁移方案' }
+    },
+    {
+        type: 'todo',
+        fields: ['priority', 'task', 'owner', 'deadline'],
+        defaults: { priority: 'P0', task: '准备竞争对比材料并预约张总会议', owner: '销售经理', deadline: '本周三前' }
+    }
+];
+
+/**
+ * 从文本中提取 <<<CARD_DATA>>>...<<<END_CARD>>> 块
+ * @param {string} text - 单段 AI 输出文本
+ * @returns {{ narrative: string, cardData: object|null }}
+ */
+function extractCardData(text) {
+    const cardDataRegex = /<<<CARD_DATA>>>[\s\S]*?<<<END_CARD>>>/;
+    const match = text.match(cardDataRegex);
+
+    if (!match) {
+        return { narrative: text, cardData: null };
+    }
+
+    // 去掉标记块，保留纯叙事文本
+    const narrative = text.replace(cardDataRegex, '').trim();
+
+    // 解析 key=value 对
+    const dataBlock = match[0]
+        .replace('<<<CARD_DATA>>>', '')
+        .replace('<<<END_CARD>>>', '')
+        .trim();
+
+    const cardData = {};
+    dataBlock.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+            const key = trimmed.substring(0, eqIdx).trim();
+            const value = trimmed.substring(eqIdx + 1).trim();
+            if (key && value) cardData[key] = value;
+        }
+    });
+
+    return { narrative, cardData: Object.keys(cardData).length > 0 ? cardData : null };
+}
+
+/**
+ * 清洗叙事文本：去掉 AI 可能泄漏的结构化内容
+ * @param {string} text - 原始叙事文本
+ * @returns {string} 清洗后的纯文本
+ */
+function cleanNarrativeText(text) {
+    return text
+        // 去掉 Markdown 标题行
+        .replace(/^#{1,4}\s+.+$/gm, '')
+        // 去掉 Markdown 表格行（| xxx | xxx |）
+        .replace(/^\|.*\|\s*$/gm, '')
+        // 去掉 AI 自创的英文卡片小标题
+        .replace(/^(Win Rate Snapshot|Risk Alert|Key Person Profile|Action Plan|Stakeholder Profile)\s*$/gim, '')
+        // 去掉连续空行（合并为最多一个空行）
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
 
 /**
  * 解析 AI 响应为 Widget 数组
@@ -253,62 +469,170 @@ const FIXED_CARDS = {
  * @param {string} persona - 当前角色 ('vendor' | 'client')
  * @returns {{ success: boolean, widgets?: Array, error?: string }}
  */
-function parseWidgetResponse(response, persona = 'client') {
+function parseWidgetResponse(response, persona = 'client', intent = 'full') {
     if (!response || typeof response !== 'string') {
         return { success: false, error: 'Response is empty or not a string' };
     }
 
     // ========================================================================
-    // LOGIC PATH 1: VENDOR (FORCE INJECTION)
+    // LOGIC PATH 0: VENDOR SINGLE INTENT
+    // ========================================================================
+    if (persona === PERSONA_TYPES.VENDOR && intent && intent !== 'full' && INTENT_CARD_CONFIG[intent]) {
+        console.log(`[parseWidgetResponse] Processing VENDOR single intent: ${intent}`);
+
+        let cleanResponse = response.replace(/^```json/i, '').replace(/^```markdown/i, '').replace(/```$/g, '');
+
+        const config = INTENT_CARD_CONFIG[intent];
+        const template = CARD_TEMPLATES[config.templateIndex];
+
+        const { narrative, cardData } = extractCardData(cleanResponse);
+        const cleanText = cleanNarrativeText(narrative);
+
+        const widgets = [];
+        const contentWithHeader = `${config.header}\n\n${cleanText}`;
+        widgets.push({ type: 'markdown', content: cleanText ? contentWithHeader : config.header });
+
+        const mergedData = { ...template.defaults };
+        if (cardData) {
+            for (const [key, value] of Object.entries(cardData)) {
+                if (template.fields.includes(key)) {
+                    mergedData[key] = value;
+                    console.log(`[parseWidgetResponse] Single intent: AI filled "${key}" = "${value}"`);
+                }
+            }
+        }
+        widgets.push({ type: template.type, data: mergedData });
+
+        console.log(`[parseWidgetResponse] Single intent ${intent} done.`);
+        return { success: true, widgets };
+    }
+
+    // ========================================================================
+    // LOGIC PATH 1: VENDOR FULL ANALYSIS (FORCE INJECTION)
     // ========================================================================
     if (persona === PERSONA_TYPES.VENDOR) {
         console.log('[parseWidgetResponse] Processing VENDOR response with Force Injection...');
 
-        // 尝试使用分隔符切割文本
-        const delimiter = '<<<SPLIT>>>';
         // Remove markdown artifacts if present
         let cleanResponse = response.replace(/^```json/i, '').replace(/^```markdown/i, '').replace(/```$/g, '');
 
-        // Split and trim
-        let parts = cleanResponse.split(delimiter).map(p => p.trim()).filter(p => p);
+        // ============================================================
+        // 多级分割策略：确保 AI 不管用什么格式，都能切成 4 段
+        // ============================================================
+        let parts = [];
 
-        // Fallback: If AI fails to split, try double newline or just use whole text
-        if (parts.length < 2 && response.includes('\n\n')) {
-            // Optional: heuristic split? No, risk of breaking sentences.
-            // Just treat as one big block.
-            console.warn(`[parseWidgetResponse] Delimiter not found. Using whole text as Section 1.`);
+        // 策略 1: 用 <<<SPLIT>>> 分隔符（首选）
+        const delimiter = '<<<SPLIT>>>';
+        if (cleanResponse.includes(delimiter)) {
+            parts = cleanResponse.split(delimiter).map(p => p.trim()).filter(p => p);
+            console.log(`[parseWidgetResponse] Split strategy: <<<SPLIT>>> → ${parts.length} parts`);
+        }
+
+        // 策略 2: 用 <<<CARD_DATA>>> 块作为锚点分割
+        // 逻辑：每个 CARD_DATA 块标记一个 section 的结尾
+        // 文本结构: [text1]<<<CARD_DATA>>>...<<<END_CARD>>>[text2]<<<CARD_DATA>>>...
+        if (parts.length < 2) {
+            const cardBlockRegex = /<<<CARD_DATA>>>[\s\S]*?<<<END_CARD>>>/g;
+            const cardBlocks = cleanResponse.match(cardBlockRegex);
+            if (cardBlocks && cardBlocks.length >= 2) {
+                // 用 CARD_DATA 块作为分割点，保留块在对应段内
+                // 先把每个 CARD_DATA 块替换为一个唯一分隔符
+                const tempDelimiter = '<<<__SECTION_BREAK__>>>';
+                let marked = cleanResponse;
+                cardBlocks.forEach(block => {
+                    // 在每个 CARD_DATA 块后面插入分隔符
+                    marked = marked.replace(block, block + tempDelimiter);
+                });
+                // 最后一个 section 末尾不需要分隔符，去掉末尾的
+                if (marked.endsWith(tempDelimiter)) {
+                    marked = marked.slice(0, -tempDelimiter.length);
+                }
+                parts = marked.split(tempDelimiter).map(p => p.trim()).filter(p => p);
+                console.log(`[parseWidgetResponse] Split strategy: <<<CARD_DATA>>> anchors → ${parts.length} parts`);
+            }
+        }
+
+        // 策略 3: 用数字编号模式分割（AI 爱用 "1." "2." 或 "一、" "二、"）
+        if (parts.length < 2) {
+            // 匹配行首的数字编号: "1." "2." "3." "4." 或 "一、" "二、" "三、" "四、"
+            const numberedSplit = cleanResponse.split(/\n(?=(?:\d+[\.\、]|[一二三四][\、]))\s*/);
+            if (numberedSplit.length >= 4) {
+                parts = numberedSplit.map(p => p.trim()).filter(p => p);
+                console.log(`[parseWidgetResponse] Split strategy: numbered sections → ${parts.length} parts`);
+            }
+        }
+
+        // 策略 4: 兜底 —— 按段落均分
+        if (parts.length < 2) {
+            console.warn(`[parseWidgetResponse] All split strategies failed. Splitting by paragraphs.`);
+            const paragraphs = cleanResponse.split(/\n\n+/).filter(p => p.trim());
+            if (paragraphs.length >= 4) {
+                // 尽量均分成 4 组
+                const chunkSize = Math.ceil(paragraphs.length / 4);
+                parts = [];
+                for (let i = 0; i < 4; i++) {
+                    const chunk = paragraphs.slice(i * chunkSize, (i + 1) * chunkSize);
+                    parts.push(chunk.join('\n\n'));
+                }
+            } else {
+                // 段落太少，按原样处理（至少保证有内容）
+                parts = paragraphs.length > 0 ? paragraphs : [cleanResponse];
+            }
+            console.log(`[parseWidgetResponse] Split strategy: paragraph chunking → ${parts.length} parts`);
+        }
+
+        // 确保至少有 4 段（不够的用空字符串补齐）
+        while (parts.length < 4) {
+            parts.push('');
         }
 
         const widgets = [];
 
-        // 强行按顺序拼接
-        // 逻辑：Text1 -> Card1 -> Text2 -> Card2 -> Text3 -> Card3 -> Text4 -> Card4
-        // 如果文本段落不够，后续文本为空，但卡片依然要显示！
+        // 标题由代码注入，不依赖 AI
+        const SECTION_HEADERS = [
+            '### 📊 赢率分析',
+            '### ⚠️ 竞争风险',
+            '### 🎯 关键人物策略',
+            '### ✅ 行动计划',
+        ];
 
-        const getText = (idx) => parts[idx] || "";
+        const getText = (idx) => parts[idx] || '';
 
-        // Section 1
-        if (getText(0)) widgets.push({ type: 'markdown', content: getText(0) });
-        widgets.push(FIXED_CARDS.CARD_1);
+        for (let i = 0; i < 4; i++) {
+            const rawText = getText(i);
 
-        // Section 2
-        if (getText(1)) widgets.push({ type: 'markdown', content: getText(1) });
-        widgets.push(FIXED_CARDS.CARD_2);
+            // Step 1: 提取 <<<CARD_DATA>>> 块
+            const { narrative, cardData } = extractCardData(rawText);
 
-        // Section 3
-        if (getText(2)) widgets.push({ type: 'markdown', content: getText(2) });
-        widgets.push(FIXED_CARDS.CARD_3);
+            // Step 2: 清洗叙事文本（去掉泄漏的表格/标题等）
+            const cleanText = cleanNarrativeText(narrative);
 
-        // Section 4
-        if (getText(3)) widgets.push({ type: 'markdown', content: getText(3) });
-        widgets.push(FIXED_CARDS.CARD_4);
+            // Step 3: 注入标题 + 纯叙事文本 → markdown widget
+            const contentWithHeader = `${SECTION_HEADERS[i]}\n\n${cleanText}`;
+            widgets.push({ type: 'markdown', content: cleanText ? contentWithHeader : SECTION_HEADERS[i] });
+
+            // Step 4: 构建卡片 —— AI 提供的值 merge 进模板，缺失字段用默认值兜底
+            const template = CARD_TEMPLATES[i];
+            const mergedData = { ...template.defaults };
+            if (cardData) {
+                for (const [key, value] of Object.entries(cardData)) {
+                    if (template.fields.includes(key)) {
+                        mergedData[key] = value;
+                        console.log(`[parseWidgetResponse] Card ${i + 1}: AI filled field "${key}" = "${value}"`);
+                    }
+                }
+            } else {
+                console.warn(`[parseWidgetResponse] Card ${i + 1}: No CARD_DATA found, using all defaults.`);
+            }
+            widgets.push({ type: template.type, data: mergedData });
+        }
 
         // Extra text?
         if (parts.length > 4) {
             widgets.push({ type: 'markdown', content: parts.slice(4).join('\n\n') });
         }
 
-        console.log(`[parseWidgetResponse] VENDOR Success. Injected 4 cards.`);
+        console.log(`[parseWidgetResponse] VENDOR Success. Processed 4 sections with template cards.`);
         return { success: true, widgets };
     }
 
