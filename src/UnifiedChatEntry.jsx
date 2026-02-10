@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import DualRoleView from './experiments/DualRoleView';
 import DualRoleViewV2 from './experiments/DualRoleViewV2';
+import DualRoleViewV3 from './experiments/DualRoleViewV3';
 
 export default function UnifiedChatEntry() {
-    const [activeVersion, setActiveVersion] = useState('v1'); // 'v1' | 'v2'
+    const [activeVersion, setActiveVersion] = useState('v1'); // 'v1' | 'v2' | 'v3'
 
     return (
         <div className="flex flex-col h-screen w-screen bg-[#000000] overflow-hidden relative">
@@ -41,17 +42,30 @@ export default function UnifiedChatEntry() {
                         版本 2.0
                     </span>
                 </button>
+                <button
+                    onClick={() => setActiveVersion('v3')}
+                    className={`
+                        px-4 py-2 text-xs font-semibold rounded-full transition-all duration-300
+                        ${activeVersion === 'v3'
+                            ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30'
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                        }
+                    `}
+                >
+                    <span className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${activeVersion === 'v3' ? 'bg-white' : 'bg-orange-500'}`}></span>
+                        移动端 (v3)
+                    </span>
+                </button>
             </div>
 
             {/* ========================================== */}
             {/* Content Area                               */}
             {/* ========================================== */}
             <div className="flex-1 relative min-h-0">
-                {activeVersion === 'v1' ? (
-                    <DualRoleView />
-                ) : (
-                    <DualRoleViewV2 />
-                )}
+                {activeVersion === 'v1' && <DualRoleView />}
+                {activeVersion === 'v2' && <DualRoleViewV2 />}
+                {activeVersion === 'v3' && <DualRoleViewV3 />}
             </div>
         </div>
     );
