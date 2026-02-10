@@ -67,7 +67,7 @@ const ThinkingIndicator = () => (
 // ==========================================
 // Main Component
 // ==========================================
-const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A', onWidgetClick }, ref) => {
+const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY_A', onWidgetClick, onDocumentOpen }, ref) => {
     // --- State: 独立的消息状态（甲方/乙方隔离）---
     const [clientMessages, setClientMessages] = useState([
         {
@@ -754,7 +754,12 @@ ${reviewInstructions}
                         content={msg.content}
                         widgets={msg.widgets || []}
                         isThinking={msg.isThinking && !msg.content && !hasNarrativeContent}
-                        onWidgetClick={onWidgetClick}
+                        onWidgetClick={(type, data) => {
+                            if (type === 'gateway' && onDocumentOpen) {
+                                onDocumentOpen();
+                            }
+                            onWidgetClick?.(type, data);
+                        }}
                     />
                 )}
             </div>
@@ -785,7 +790,7 @@ ${reviewInstructions}
                 }
             }}
         >
-            <div className="w-[380px] h-full flex flex-col bg-zinc-900 rounded-xl overflow-hidden chat-panel-dark">
+            <div className="w-full h-full flex flex-col bg-zinc-900 rounded-xl overflow-hidden chat-panel-dark">
                 {/* --- Header --- */}
                 <div className="h-14 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
                     <div className="flex items-center gap-3">

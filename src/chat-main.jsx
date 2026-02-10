@@ -5,6 +5,7 @@ import zhCN from 'antd/locale/zh_CN'
 import { XProvider } from '@ant-design/x'
 import UnifiedChatEntry from './UnifiedChatEntry'
 import './index.css'
+import './styles/progressive.css'
 
 const theme = {
   token: {

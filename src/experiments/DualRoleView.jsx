@@ -1,17 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
-import MockSplitView from '../MockSplitView';
-
-
-
-
 import Drawer from '../components/Drawer';
-import AiAssistantSidebar from '../components/AiAssistantSidebar';
-import { IconAI, IconMenu, IconSend } from '../svg-icons';
+import ProgressiveLayout from '../components/ProgressiveLayout';
+import { IconSend } from '../svg-icons';
 import { DOCUMENT_CONTENT } from '../data/documentModel';
 import { sendMessageToKimi } from '../services/kimiService';
 import { eventBus, EVENTS } from '../utils/eventBus';
 import axios from 'axios';
-import AgentProcessCycle from '../components/AgentProcessCycle';
 
 
 
@@ -726,181 +720,65 @@ Name: ${comment.user}
         return DOCUMENT_CONTENT[0]?.id || "block-doc-title";
     };
 
+    // CommentCard 渲染函数（传递给 ProgressiveLayout）
+    const renderComment = (c) => (
+        <CommentCard
+            key={c.id}
+            comment={c}
+            isActive={activeId === c.id}
+            onClick={handleCommentClick}
+            onReply={handleReply}
+            onDelete={handleDeleteComment}
+        />
+    );
+
     return (
-        <div className="absolute inset-4 flex flex-col text-white font-sans overflow-hidden gap-4">
-            {/* Drawer for Config */}
+        <>
+            {/* Drawer for Config（保持在顶层，不受布局影响） */}
             <Drawer isOpen={isConfigOpen} onClose={() => setIsConfigOpen(false)} title="系统配置">
                 <Suspense fallback={<div className="p-4">Loading Config...</div>}>
                     <AppConfig isEmbedded={true} />
                 </Suspense>
             </Drawer>
 
-            {/* ========================================== */}
-            {/* TOP: Global Header (Full Width)           */}
-            {/* ========================================== */}
-            <div className="h-14 w-full flex items-center justify-between px-5 bg-zinc-900 rounded-xl shrink-0">
-                <div className="flex items-center gap-3">
-                    <span className="font-bold text-base text-zinc-100">Dual-Role Experiment</span>
+            {/* 渐进式布局容器 */}
+            <ProgressiveLayout
+                comments={comments}
+                activeId={activeId}
+                currentRole={currentRole}
+                agentEnabled={agentEnabled}
+                vendorConfig={vendorConfig}
+                isAgentTyping={isAgentTyping}
 
-                    {/* ROLE SWITCHER */}
-                    <div className="flex bg-zinc-800 rounded-lg p-0.5 ml-4">
-                        <button
-                            onClick={() => setCurrentRole('PARTY_A')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_A'
-                                ? 'bg-[#3B82F6] text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                        >
-                            甲方
-                        </button>
-                        <button
-                            onClick={() => setCurrentRole('PARTY_B')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_B'
-                                ? 'bg-[#3B82F6] text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                        >
-                            乙方
-                        </button>
-                    </div>
-                </div>
+                onCommentClick={handleCommentClick}
+                onElementClick={handleElementClick}
+                onReply={handleReply}
+                onDeleteComment={handleDeleteComment}
+                onTextSelect={handleTextSelect}
+                onSubmit={handleSubmit}
 
-                <div className="flex items-center gap-2">
-                    {/* CONDITIONAL ACTION BUTTONS - AI Review 已隐藏，功能可通过语义触发 */}
-                    {currentRole === 'PARTY_A' ? (
-                        <button
-                            onClick={handleAiReviewTrigger}
-                            disabled={false} // Always enabled now, Sidebar manages state
-                            style={{ display: 'none' }} // 隐藏按钮，保留代码便于恢复
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all
-                                bg-white text-black hover:bg-zinc-200 shadow-sm
-                            `}
-                        >
-                            <IconAI className="w-3.5 h-3.5" />
-                            AI Review
-                        </button>
-                    ) : (
-                        // PARTY B: Agent Toggle
-                        <div className="flex items-center gap-3 bg-zinc-800 rounded-full px-3 py-1 text-xs">
-                            {isAgentTyping && (
-                                <AgentProcessCycle onComplete={() => setIsAgentTyping(false)} />
-                            )}
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs text-zinc-400">启用Agent自动回复</span>
-                                <button
-                                    onClick={() => setAgentEnabled(!agentEnabled)}
-                                    className={`w-8 h-4 rounded-full p-0.5 transition-colors duration-300 ${agentEnabled ? 'bg-green-500' : 'bg-zinc-600'
-                                        }`}
-                                >
-                                    <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform duration-300 ${agentEnabled ? 'translate-x-4' : 'translate-x-0'
-                                        }`} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                sidebarRef={sidebarRef}
+                scrollContainerRef={scrollContainerRef}
 
-                    <button
-                        onClick={() => setIsConfigOpen(true)}
-                        className="p-2 hover:bg-zinc-900 rounded-md text-zinc-400 hover:text-white transition-colors"
-                    >
-                        <IconMenu className="w-5 h-5" />
-                    </button>
-                </div>
-            </div>
+                toolbarPosition={toolbarPosition}
+                isInputOpen={isInputOpen}
+                inputValue={inputValue}
+                selectedText={selectedText}
 
-            {/* ========================================== */}
-            {/* BOTTOM: 3-Column Content Area             */}
-            {/* (AI Chat | Document/Prototype | Comments) */}
-            {/* ========================================== */}
-            <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+                setInputValue={setInputValue}
+                setIsInputOpen={setIsInputOpen}
+                handleOpenInput={handleOpenInput}
+                handleAiReviewTrigger={handleAiReviewTrigger}
+                handleAiAnalysisComplete={handleAiAnalysisComplete}
 
-                {/* --- Column 1: AI Assistant Sidebar --- */}
-                {/* --- Column 1: AI Assistant Sidebar --- */}
-                <AiAssistantSidebar
-                    ref={sidebarRef}
-                    currentRole={currentRole}
-                    onTriggerAiReview={handleAiAnalysisComplete}
-                    onWidgetClick={(type, data) => {
-                        alert('✅ Debug: Clicked widget type: ' + type + '\nData ID: ' + (data?.id || data?.title || 'N/A'));
-                    }}
-                />
+                setIsConfigOpen={setIsConfigOpen}
 
-                {/* --- Column 2: Document/Prototype View --- */}
-                <div className="flex-1 relative overflow-hidden min-w-0 bg-[#2C2C2C] rounded-xl">
-                    <div className="h-full w-full overflow-hidden" ref={scrollContainerRef}>
-                        <MockSplitView
-                            activeCommentId={activeId}
-                            activeUiId={comments.find(c => c.id === activeId)?.anchor?.uiRef || null}
-                            comments={comments}
-                            onTextSelect={handleTextSelect}
-                            isThinking={false}
-                            isReviewing={false}
-                            activeSection={null}
-                            onSelectElement={handleElementClick}
-                            isLegacyMode={false}
-                            isFallbackActive={false}
-                        />
-                    </div>
+                setAgentEnabled={setAgentEnabled}
+                setCurrentRole={setCurrentRole}
+                setIsAgentTyping={setIsAgentTyping}
 
-                    {/* Floating Toolbar */}
-                    {toolbarPosition && (
-                        <div
-                            style={{ position: 'fixed', top: toolbarPosition.top, left: toolbarPosition.left, zIndex: 9999 }}
-                            className="animate-in fade-in zoom-in duration-200"
-                        >
-                            {!isInputOpen ? (
-                                <button
-                                    onClick={handleOpenInput}
-                                    onMouseDown={e => e.preventDefault()}
-                                    className="bg-zinc-800 shadow-xl text-white px-3 py-1.5 rounded-full text-sm font-medium hover:bg-blue-600 flex items-center gap-2"
-                                >
-                                    💬 Add Comment
-                                </button>
-                            ) : (
-                                <div className="bg-zinc-800 shadow-2xl rounded-lg p-3 w-72 flex flex-col gap-2">
-                                    <div className="text-xs text-zinc-400 border-l-2 border-yellow-500 pl-2 mb-1 truncate">Target: "{selectedText}"</div>
-                                    <textarea
-                                        autoFocus
-                                        className="bg-black/50 border border-zinc-700 rounded p-2 text-sm text-white resize-none focus:outline-none focus:border-blue-500"
-                                        rows={3}
-                                        placeholder="Type your comment..."
-                                        value={inputValue}
-                                        onChange={e => setInputValue(e.target.value)}
-                                        // Submit hotkey
-                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                        <button onClick={() => setIsInputOpen(false)} className="text-xs text-zinc-400 hover:text-white px-2">Cancel</button>
-                                        <button onClick={handleSubmit} className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-500 font-medium">Post</button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* --- Column 3: Comment Sidebar --- */}
-                <div className="w-[340px] bg-zinc-900 flex flex-col rounded-xl overflow-hidden">
-                    <div className="h-14 flex items-center px-4 bg-zinc-900/50">
-                        <span className="font-medium">评论 ({comments.length})</span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-
-
-                        {comments.map(c => (
-                            <CommentCard
-                                key={c.id}
-                                comment={c}
-                                isActive={activeId === c.id}
-                                onClick={handleCommentClick}
-                                onReply={handleReply}
-                                onDelete={handleDeleteComment}
-                            />
-                        ))}
-                    </div>
-                </div>
-
-            </div>
-        </div >
+                renderComment={renderComment}
+            />
+        </>
     );
 }
