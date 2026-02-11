@@ -97,8 +97,12 @@ export default function AiPersonaConfigModal({
             }}
         >
             <Alert
-                message="叙事引擎 (Narrative Engine) 已激活"
-                description="在此配置 AI 的深层思维模式。这些设置将直接决定 Narrative Engine 生成的卡片逻辑和话术风格。"
+                description={
+                    <div className="flex flex-col gap-1">
+                        <span className="font-medium text-base text-zinc-800">叙事引擎 (Narrative Engine) 已激活</span>
+                        <span className="opacity-90">在此配置 AI 的深层思维模式。这些设置将直接决定 Narrative Engine 生成的卡片逻辑和话术风格。</span>
+                    </div>
+                }
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}

@@ -1,217 +1,213 @@
-import { useState, useEffect, useRef, useMemo, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Think from '@ant-design/x/es/think';
 
 /**
- * ThinkingAccordion - 思维链展示组件
- * 
- * 支持两种模式：
- * 1. 定时模式：通过 thoughts 数组 + duration 自动打印
- * 2. 实时模式：通过 realTimeLogs 字符串实时展示流式内容
- * 
+ * ThinkingAccordion - 思维链展示组件（高级版）
+ *
+ * 折叠模式：单行滚动窗口，一行打完后滚动切换到下一行
+ * 展开模式：多行显示，当前行打字 + 后续行骨架屏占位
+ *
  * @param {boolean} loading - 是否正在加载
- * @param {string[]} thoughts - 定时模式的思考步骤数组
- * @param {number} duration - 定时模式的总时长（毫秒）
- * @param {string} realTimeLogs - 实时模式的流式日志内容
+ * @param {string} realTimeLogs - 实时流式日志内容
  */
 export default function ThinkingAccordion({
     loading,
-    thoughts: thoughtsProp = [],
-    duration = 4000,
-    realTimeLogs = null
+    realTimeLogs = null,
 }) {
-    // ==================== 稳定 props 引用 ====================
-    // 关键修复：用 useMemo + JSON.stringify 稳定 thoughts 数组引用
-    const thoughtsKey = JSON.stringify(thoughtsProp);
-    const thoughts = useMemo(() => thoughtsProp, [thoughtsKey]);
+    // ==================== 将内容按行分割 ====================
+    const allLines = useMemo(() => {
+        if (!realTimeLogs) return [];
+        return realTimeLogs.split('\n').filter(line => line.trim().length > 0);
+    }, [realTimeLogs]);
 
-    // 判断是否为实时模式（注意：空字符串 "" 也算实时模式，只有 null/undefined 才是定时模式）
-    const isRealTimeMode = realTimeLogs !== null && realTimeLogs !== undefined;
+    // ==================== 行级状态 ====================
+    const [currentLineIdx, setCurrentLineIdx] = useState(0);  // 当前渲染到第几行
+    const [currentCharIdx, setCurrentCharIdx] = useState(0);  // 当前行渲染到第几个字符
+    const [completedLines, setCompletedLines] = useState([]); // 已完成渲染的行
+    const [isExpanded, setIsExpanded] = useState(false);      // 是否展开
 
-    // ==================== 实时模式：使用 useMemo 派生值 ====================
-    // 关键修复：不使用 useEffect + setState，避免无限循环
-    const realTimeLines = useMemo(() => {
-        if (!isRealTimeMode) return [];
-        if (!realTimeLogs) return []; // 空字符串返回空数组
-        return realTimeLogs
-            .split('\n')
-            .filter(line => line.trim().length > 0);
-    }, [realTimeLogs, isRealTimeMode]);
-
-    // ==================== 定时模式：保留原有状态逻辑 ====================
-    const [timedLogs, setTimedLogs] = useState([]);
-
-    // 统一的展开/折叠状态
-    const [isExpanded, setIsExpanded] = useState(true);
-
-    // 用于追踪是否已自动折叠（防止重复触发）
-    const hasAutoCollapsedRef = useRef(false);
-
-    // 用于追踪定时模式是否已初始化（防止重复 setState）
-    const timedModeInitializedRef = useRef(false);
-
-    // 滚动容器 ref
+    // Refs
+    const typingTimerRef = useRef(null);
     const scrollContainerRef = useRef(null);
 
-    // 根据模式选择显示的日志
-    const visibleLogs = isRealTimeMode ? realTimeLines : timedLogs;
+    // 当前行的完整文本
+    const currentLineText = allLines[currentLineIdx] || '';
+    // 当前行已渲染的部分
+    const currentLineRendered = currentLineText.slice(0, currentCharIdx);
+    // 是否还在打字（当前行未完成）
+    const isTyping = currentCharIdx < currentLineText.length;
+    // 是否还有更多行
+    const hasMoreLines = currentLineIdx < allLines.length - 1;
+    // 预估的骨架屏行数（后续未渲染的行）
+    const skeletonLineCount = Math.max(0, allLines.length - currentLineIdx - 1);
 
-    // ==================== 自动滚动：使用 useLayoutEffect 确保稳定 ====================
-    useLayoutEffect(() => {
-        if (!scrollContainerRef.current || !isExpanded) return;
+    // ==================== 打字机效果 ====================
+    const TYPING_SPEED = 25; // 每字符间隔 (ms)
+    const LINE_SWITCH_DELAY = 300; // 行切换延迟 (ms)
 
-        // 使用 requestAnimationFrame 确保 DOM 已更新
-        const frameId = requestAnimationFrame(() => {
-            if (scrollContainerRef.current) {
-                scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-            }
-        });
-
-        return () => cancelAnimationFrame(frameId);
-    }, [visibleLogs.length, isExpanded]);
-
-    // ==================== 自动折叠逻辑（两种模式共用） ====================
     useEffect(() => {
-        // 加载中时，重置折叠追踪
-        if (loading) {
-            hasAutoCollapsedRef.current = false;
+        // 清理
+        if (typingTimerRef.current) {
+            clearTimeout(typingTimerRef.current);
+        }
+
+        // 没有内容或加载结束
+        if (!loading && allLines.length === 0) {
             return;
         }
 
-        // 没有内容时不折叠
-        if (visibleLogs.length === 0) return;
-
-        // 已经自动折叠过，不再重复
-        if (hasAutoCollapsedRef.current) return;
-
-        // 加载结束且有内容，延迟自动折叠
-        const timer = setTimeout(() => {
-            hasAutoCollapsedRef.current = true;
-            setIsExpanded(false);
-        }, 500);
-
-        return () => clearTimeout(timer);
-    }, [loading, visibleLogs.length]);
-
-    // ==================== 定时模式：逐行打印逻辑 ====================
-    useEffect(() => {
-        // 实时模式跳过
-        if (isRealTimeMode) {
-            timedModeInitializedRef.current = false;
+        // 当前行还没打完
+        if (currentCharIdx < currentLineText.length) {
+            typingTimerRef.current = setTimeout(() => {
+                setCurrentCharIdx(prev => prev + 1);
+            }, TYPING_SPEED);
             return;
         }
 
-        // 加载结束：直接显示全部
-        if (!loading) {
-            // 只有当内容真的变化时才更新
-            setTimedLogs(prev => {
-                if (JSON.stringify(prev) === JSON.stringify(thoughts)) return prev;
-                return thoughts;
-            });
-            timedModeInitializedRef.current = false;
-            return;
-        }
-
-        // 加载中 + 定时模式
-        // 检查是否已经初始化过，避免重复触发
-        if (timedModeInitializedRef.current) return;
-        timedModeInitializedRef.current = true;
-
-        // 重置状态
-        setTimedLogs([]);
-        setIsExpanded(true);
-
-        if (thoughts.length === 0) return;
-
-        const stepTime = duration / thoughts.length;
-        let currentStep = 0;
-
-        const timer = setInterval(() => {
-            if (currentStep < thoughts.length) {
-                const log = thoughts[currentStep];
-                setTimedLogs(prev => {
-                    if (prev.includes(log)) return prev;
-                    return [...prev, log];
-                });
-                currentStep++;
-            } else {
-                clearInterval(timer);
+        // 当前行打完了，准备切换到下一行
+        if (currentLineIdx < allLines.length - 1) {
+            // 把当前行加入已完成列表
+            if (!completedLines.includes(currentLineText) && currentLineText) {
+                setCompletedLines(prev => [...prev, currentLineText]);
             }
-        }, stepTime);
+            // 延迟后切换到下一行
+            typingTimerRef.current = setTimeout(() => {
+                setCurrentLineIdx(prev => prev + 1);
+                setCurrentCharIdx(0);
+            }, LINE_SWITCH_DELAY);
+            return;
+        }
+
+        // 所有行都打完了
+        if (currentLineIdx === allLines.length - 1 && currentCharIdx >= currentLineText.length) {
+            // 把最后一行也加入完成列表
+            if (!completedLines.includes(currentLineText) && currentLineText) {
+                setCompletedLines(prev => [...prev, currentLineText]);
+            }
+        }
 
         return () => {
-            clearInterval(timer);
-            timedModeInitializedRef.current = false;
+            if (typingTimerRef.current) {
+                clearTimeout(typingTimerRef.current);
+            }
         };
-    }, [loading, thoughts, duration, isRealTimeMode]);
+    }, [currentCharIdx, currentLineIdx, currentLineText, allLines, loading, completedLines]);
 
-    // ==================== 实时模式启动时展开 ====================
-    const prevRealTimeCountRef = useRef(0);
+    // ==================== 当有新行到达时的处理 ====================
     useEffect(() => {
-        if (!isRealTimeMode || !loading) return;
-
-        // 只有当日志数量增加时才展开（避免重复触发）
-        if (realTimeLines.length > 0 && realTimeLines.length > prevRealTimeCountRef.current) {
-            setIsExpanded(true);
+        // 如果新数据到达，且当前已经打完所有已知行，需要继续
+        if (allLines.length > completedLines.length + 1) {
+            // 有新行，但我们可能还在打之前的行，不需要特殊处理
         }
-        prevRealTimeCountRef.current = realTimeLines.length;
-    }, [isRealTimeMode, loading, realTimeLines.length]);
+    }, [allLines.length, completedLines.length]);
 
-    // ==================== 重置 ref 当 loading 变化 ====================
+    // ==================== loading 开始时重置 ====================
     useEffect(() => {
-        if (loading) {
-            prevRealTimeCountRef.current = 0;
+        if (loading && allLines.length === 0) {
+            setCurrentLineIdx(0);
+            setCurrentCharIdx(0);
+            setCompletedLines([]);
         }
-    }, [loading]);
+    }, [loading, allLines.length]);
 
-    // 计算显示的时间
-    const displayDuration = isRealTimeMode
-        ? null
-        : (duration / 1000).toFixed(1);
+    // ==================== loading 结束后快速完成剩余 ====================
+    useEffect(() => {
+        if (!loading && allLines.length > 0) {
+            // 加载结束，快速完成所有未渲染的内容
+            setCompletedLines(allLines);
+            setCurrentLineIdx(allLines.length - 1);
+            setCurrentCharIdx(allLines[allLines.length - 1]?.length || 0);
+        }
+    }, [loading, allLines]);
+
+    // ==================== 自动滚动 ====================
+    useEffect(() => {
+        if (scrollContainerRef.current && isExpanded) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+        }
+    }, [completedLines.length, currentCharIdx, isExpanded]);
+
+    // ==================== 渲染 ====================
+    const title = loading ? '深度思考中...' : '思考完成';
+
+    // 折叠模式：只显示当前正在打字的一行（滚动窗口效果）
+    const renderCollapsedView = () => {
+        if (allLines.length === 0) {
+            return <span className="thinking-waiting">等待 AI 响应...</span>;
+        }
+
+        return (
+            <div className="thinking-collapsed-window">
+                <div className="thinking-line-scroll">
+                    <span className="thinking-line-text">
+                        {currentLineRendered}
+                    </span>
+                    {isTyping && <span className="thinking-cursor">▎</span>}
+                </div>
+            </div>
+        );
+    };
+
+    // 展开模式：显示所有行 + 骨架屏
+    const renderExpandedView = () => {
+        if (allLines.length === 0) {
+            return <span className="thinking-waiting">等待 AI 响应...</span>;
+        }
+
+        return (
+            <div className="thinking-expanded-container" ref={scrollContainerRef}>
+                {/* 已完成的行 */}
+                {completedLines.map((line, idx) => (
+                    <div key={`completed-${idx}`} className="thinking-line completed">
+                        <span className="thinking-line-prefix">⮑</span>
+                        <span className="thinking-line-text">{line}</span>
+                    </div>
+                ))}
+
+                {/* 当前正在打字的行（如果不在已完成列表中） */}
+                {!completedLines.includes(currentLineText) && currentLineText && (
+                    <div className="thinking-line current">
+                        <span className="thinking-line-prefix">⮑</span>
+                        <span className="thinking-line-text">
+                            {currentLineRendered}
+                            {isTyping && <span className="thinking-cursor">▎</span>}
+                        </span>
+                    </div>
+                )}
+
+                {/* 骨架屏占位（后续未渲染的行） */}
+                {loading && skeletonLineCount > 0 && (
+                    <>
+                        {Array.from({ length: Math.min(skeletonLineCount, 3) }).map((_, idx) => (
+                            <div key={`skeleton-${idx}`} className="thinking-line skeleton">
+                                <span className="thinking-line-prefix">⮑</span>
+                                <span className="thinking-skeleton-bar" style={{ width: `${60 + Math.random() * 30}%` }} />
+                            </div>
+                        ))}
+                    </>
+                )}
+            </div>
+        );
+    };
 
     return (
-        <div className="bg-gray-50 rounded-lg border-l-4 border-indigo-400 p-3 font-mono text-xs text-gray-700 w-full mb-2 shadow-sm transition-all duration-300">
-            <div
-                className="flex items-center justify-between cursor-pointer select-none"
-                onClick={() => setIsExpanded(!isExpanded)}
-            >
-                <div className="flex items-center gap-2">
+        <div className="thinking-accordion-wrapper">
+            <div className="thinking-header" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="thinking-header-left">
                     {loading ? (
-                        <span className="inline-block w-4 h-4 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></span>
+                        <span className="thinking-spinner" />
                     ) : (
-                        <span className="text-green-500 text-sm">✅</span>
+                        <span className="thinking-done-icon">✓</span>
                     )}
-                    <span className="font-semibold text-gray-800">
-                        {loading
-                            ? "深度思考中..."
-                            : displayDuration
-                                ? `已深度思考 (${displayDuration}s)`
-                                : "思考完成"
-                        }
-                    </span>
+                    <span className="thinking-title">{title}</span>
                 </div>
-                <div className={`text-gray-400 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                <div className={`thinking-expand-icon ${isExpanded ? 'expanded' : ''}`}>
                     ▼
                 </div>
             </div>
 
-            {/* 内容区域：使用 max-h 做简单的展开/折叠动画 */}
-            <div
-                ref={scrollContainerRef}
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[500px] opacity-100 mt-2 overflow-y-auto' : 'max-h-0 opacity-0 mt-0'}`}
-            >
-                <div className="pl-6 border-l border-gray-200 ml-2 space-y-1.5 py-1">
-                    {visibleLogs.map((log, index) => (
-                        <div key={index} className="flex items-start gap-2 animate-fade-in">
-                            <span className="text-gray-400 shrink-0">⮑</span>
-                            <span className="text-gray-600 leading-tight">{log}</span>
-                        </div>
-                    ))}
-                    {loading && visibleLogs.length === 0 && (
-                        <div className="pl-5 animate-pulse text-gray-400">等待 AI 响应...</div>
-                    )}
-                    {loading && visibleLogs.length > 0 && (
-                        <div className="pl-5 animate-pulse text-indigo-400">_</div>
-                    )}
-                </div>
+            <div className={`thinking-content ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                {isExpanded ? renderExpandedView() : renderCollapsedView()}
             </div>
         </div>
     );

@@ -1005,16 +1005,204 @@ async function personaChat(req, res) {
     }
 }
 
+/**
+ * 流式人设对话 - SSE 流式 + Chain-of-Thought
+ * POST /api/ai/persona-chat-stream
+ *
+ * 与 /api/ai/persona-chat 功能一致，但使用 SSE 流式返回。
+ * AI 会先在 <thinking>...</thinking> 标签内输出思考过程，
+ * 然后输出正文内容（叙事 + 卡片数据）。
+ * 前端可实时展示思考过程。
+ */
+async function personaChatStream(req, res) {
+    // SSE 头
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    const sendEvent = (data) => {
+        res.write("data: " + JSON.stringify(data) + "\n\n");
+    };
+
+    try {
+        const { messages, persona, persona_config, intent } = req.body || {};
+
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            sendEvent({ type: "error", error: "messages 参数无效" });
+            return res.end();
+        }
+
+        const validPersonas = Object.values(personaPrompts.PERSONA_TYPES);
+        const targetPersona = validPersonas.includes(persona) ? persona : personaPrompts.PERSONA_TYPES.VENDOR;
+
+        // 获取项目上下文
+        const dbData = db.read();
+        const projectContext = {
+            project_name: dbData.project_meta?.project_name,
+            current_stage: dbData.project_meta?.current_stage,
+            progress: dbData.project_meta?.progress,
+            has_prd: !!dbData.project_context?.prd_text,
+        };
+
+        // 构建系统提示词 (含自定义配置)
+        let baseSystemPrompt = personaPrompts.buildPersonaSystemPrompt(
+            targetPersona,
+            projectContext,
+            persona_config,
+            intent
+        );
+
+        // 注入 Chain-of-Thought 指令（强制格式约束）
+        const thinkingInstruction = `
+
+**FORMAT CONSTRAINT (MANDATORY - SYSTEM WILL FAIL IF VIOLATED):**
+You MUST start your response IMMEDIATELY with a <thinking> block. No exceptions. Do NOT output any text before <thinking>.
+
+Required Format:
+<thinking>
+[Your step-by-step reasoning process in Chinese - at least 3-5 lines]
+</thinking>
+[Your final response content here - narrative + card data as specified above]
+
+Inside <thinking>, write your cognitive process in Chinese:
+- 分析用户问题和意图
+- 审视项目上下文和可用数据
+- 规划响应结构
+- 识别关键洞察和数据点
+
+Example Output:
+<thinking>
+1. 用户请求进行全面分析
+2. 当前项目背景：BizAgent AI协作平台，API接口开发阶段
+3. 关键数据：项目进度45%，已有PRD文档
+4. 需要输出四个部分：赢率、风险、关键人物、行动计划
+5. 将按照叙事+卡片数据的格式组织响应
+</thinking>
+根据项目现状分析，以下是详细报告...
+
+CRITICAL: The <thinking> block is REQUIRED. Start your response with <thinking> NOW.
+`;
+
+        const systemPrompt = baseSystemPrompt + thinkingInstruction;
+
+        // 构造消息列表
+        const chatMessages = [
+            { role: "system", content: systemPrompt },
+            ...messages
+        ];
+
+        logStep(`Persona Chat Stream [${targetPersona}]`, {
+            messageCount: messages.length,
+            hasConfig: !!persona_config,
+            intent: intent || 'default'
+        });
+
+        // 流式调用 AI
+        let fullContent = '';
+        for await (const chunk of aiService.callAIStream(chatMessages, {
+            temperature: 0.7,
+            max_tokens: 4096,
+        })) {
+            fullContent += chunk;
+            sendEvent({ type: "delta", content: chunk });
+        }
+
+        logStep("Persona Chat Stream 完成", { contentLength: fullContent.length });
+
+        // 从完整内容中分离 thinking 和正文
+        let thinkingContent = '';
+        let bodyContent = fullContent;
+
+        const thinkStartIdx = fullContent.indexOf('<thinking>');
+        const thinkEndIdx = fullContent.indexOf('</thinking>');
+        if (thinkStartIdx !== -1 && thinkEndIdx !== -1) {
+            thinkingContent = fullContent.substring(thinkStartIdx + 10, thinkEndIdx).trim();
+            bodyContent = (fullContent.substring(0, thinkStartIdx) + fullContent.substring(thinkEndIdx + 11)).trim();
+        }
+
+        // 解析 Widget 响应
+        const parseResult = personaPrompts.parseWidgetResponse(bodyContent, targetPersona, intent);
+
+        sendEvent({
+            type: "done",
+            widgets: parseResult.success ? parseResult.widgets : [{ type: 'markdown', content: bodyContent }],
+            thinkingContent: thinkingContent,
+            _debug: { raw: fullContent }
+        });
+
+    } catch (error) {
+        logStep("Persona Chat Stream 失败", { error: String(error) });
+        sendEvent({ type: "error", error: error.message || String(error) });
+    }
+
+    res.end();
+}
+
+/**
+ * 直通 AI 聊天 - 不经过 ReAct Agent 循环
+ * POST /api/ai/simple-chat
+ * 
+ * 与 /api/ai/chat 的区别：
+ * - /api/ai/chat 会注入 ReAct Agent 系统提示词，走工具调用循环
+ * - /api/ai/simple-chat 直接转发 messages 给 AI，前端完全控制 prompt
+ * 
+ * 适用场景：评论总结、Patch 生成等需要 JSON 结构化输出的功能
+ */
+async function simpleChat(req, res) {
+    try {
+        const { messages } = req.body || {};
+
+        if (!messages || !Array.isArray(messages) || messages.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "messages 参数无效：需要一个非空的消息数组"
+            });
+        }
+
+        const lastMessage = messages[messages.length - 1]?.content || "";
+        logStep("收到直通聊天请求 (Simple)", {
+            messageCount: messages.length,
+            lastMessage: lastMessage.slice(0, 50)
+        });
+
+        // 直接调用 AI，不经过 ReAct Loop
+        const content = await aiService.callAI(messages, {
+            temperature: 0.3,
+            max_tokens: 4096,
+        });
+
+        logStep("直通聊天响应完成", { contentLength: content?.length });
+
+        res.json({
+            success: true,
+            data: {
+                content,
+            }
+        });
+
+    } catch (error) {
+        logStep("Simple Chat 失败", { error: String(error) });
+        res.status(500).json({
+            success: false,
+            error: error.message || String(error)
+        });
+    }
+}
+
 // ============================================
 // 导出
 // ============================================
 
 module.exports = {
     chat,
+    simpleChat,
     handleComment,
     humanReply,
     vendorReply,
     autoReply,
     autoReplyStream,
     personaChat,
+    personaChatStream,
 };

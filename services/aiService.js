@@ -1424,6 +1424,7 @@ async function structureDocument(rawText) {
 module.exports = {
   // 核心函数
   callAI,
+  callAIStream,
   reviewDocument,
   reviewDocumentStream, // 流式审查文档（Chain-of-Thought + SSE）
   replyToComment,

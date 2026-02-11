@@ -22,6 +22,25 @@ body {
   overflow: hidden;
   height: 100vh;
   width: 100vw;
+  --app-font-size: 12px;
+}
+
+@media (max-width: 768px) {
+
+  html,
+  body {
+    --app-font-size: 14px;
+    /* Force override any legacy hardcoded values */
+    font-size: var(--app-font-size) !important;
+  }
+}
+
+html {
+  font-size: var(--app-font-size) !important;
+}
+
+body {
+  font-size: var(--app-font-size);
 }
 
 #root {
@@ -69,6 +88,22 @@ body {
 .chat-panel-dark .ant-bubble[role="ai"] .ant-bubble-content *,
 .chat-panel-dark .ant-bubble.ant-bubble-start .ant-bubble-content * {
   color: #E3E3E3 !important;
+}
+
+/* AI 气泡宽度限制：充满父容器 */
+.chat-panel-dark .ant-bubble {
+  max-width: 100%;
+}
+
+.chat-panel-dark .ant-bubble-content {
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* narrative-stream 宽度限制 */
+.narrative-stream {
+  max-width: 100%;
+  width: 100%;
 }
 
 /* 聊天栏发送按钮背景（覆盖 Ant Design 主色） */
@@ -341,5 +376,240 @@ th {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* =============================================
+   ThinkingAccordion - 思维链展示组件（高级版）
+   折叠模式：单行滚动窗口
+   展开模式：多行 + 骨架屏占位
+   ============================================= */
+
+/* 外层容器 */
+.thinking-accordion-wrapper {
+  width: 100%;
+  margin-bottom: 8px;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ==================== 头部（标题行） ==================== */
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.thinking-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thinking-title {
+  color: #e4e4e7;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Spinner 动画 */
+.thinking-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #3f3f46;
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: thinking-spin 0.8s linear infinite;
+}
+
+@keyframes thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 完成图标 */
+.thinking-done-icon {
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* 展开/收起图标 */
+.thinking-expand-icon {
+  color: #71717a;
+  font-size: 10px;
+  transition: transform 0.25s ease;
+}
+
+.thinking-expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+/* ==================== 内容区域 ==================== */
+.thinking-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+.thinking-content.collapsed {
+  max-height: 50px;
+  padding: 0;
+}
+
+.thinking-content.expanded {
+  max-height: 400px;
+  padding: 0;
+}
+
+/* ==================== 折叠模式：单行滚动窗口 ==================== */
+.thinking-collapsed-window {
+  height: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+.thinking-line-scroll {
+  animation: thinking-line-slide-in 0.3s ease-out forwards;
+}
+
+@keyframes thinking-line-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== 展开模式：多行容器 ==================== */
+.thinking-expanded-container {
+  max-height: 350px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+
+.thinking-expanded-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.thinking-expanded-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thinking-expanded-container::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 2px;
+}
+
+/* ==================== 行样式 ==================== */
+.thinking-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  animation: thinking-fade-in 0.3s ease-out forwards;
+}
+
+@keyframes thinking-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.thinking-line-prefix {
+  color: #52525b;
+  flex-shrink: 0;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.thinking-line-text {
+  color: #a1a1aa;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* 已完成的行 */
+.thinking-line.completed .thinking-line-text {
+  color: #a1a1aa;
+}
+
+/* 当前正在打字的行 */
+.thinking-line.current .thinking-line-text {
+  color: #d4d4d8;
+}
+
+/* ==================== 骨架屏 ==================== */
+.thinking-line.skeleton {
+  opacity: 0.6;
+}
+
+.thinking-skeleton-bar {
+  height: 14px;
+  background: linear-gradient(90deg, #3f3f46 25%, #52525b 50%, #3f3f46 75%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: thinking-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ==================== 打字光标 ==================== */
+.thinking-cursor {
+  display: inline;
+  color: #60a5fa;
+  font-weight: bold;
+  animation: cursor-blink 0.8s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes cursor-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ==================== 等待文本 ==================== */
+.thinking-waiting {
+  color: #71717a;
+  font-size: 12px;
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
   }
 }

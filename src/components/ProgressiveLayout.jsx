@@ -1,12 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { message } from 'antd';
 import useMediaQuery from '../hooks/useMediaQuery';
 import AiAssistantSidebar from './AiAssistantSidebar';
+import MobileHeader from './MobileHeader';
+import DesktopHeader from './DesktopHeader';
 import MockSplitView from '../MockSplitView';
 import CommentsPanel from './CommentsPanel';
 import BottomSheet from './BottomSheet';
 import AgentProcessCycle from './AgentProcessCycle';
+import VersionSelector from './VersionSelector';
+import FeedbackSummaryCard from './FeedbackSummaryCard';
 import { IconAI, IconMenu, IconSend } from '../svg-icons';
+import { useChatStore } from '../store/chatStore';
 
 /**
  * ProgressiveLayout - 渐进式展开布局容器
@@ -25,9 +31,9 @@ export default function ProgressiveLayout({
     comments,
     activeId,
     currentRole,
-    agentEnabled,
+    // agentEnabled, // Managed by store
     vendorConfig,
-    isAgentTyping,
+    // isAgentTyping, // Managed by store
 
     // === 回调 ===
     onCommentClick,
@@ -60,16 +66,69 @@ export default function ProgressiveLayout({
     // === Agent 控制 ===
     setAgentEnabled,
     setCurrentRole,
-    setIsAgentTyping,
+    // setIsAgentTyping, // Managed by store now
 
     // === 评论卡片渲染函数 (由 DualRoleView 传入) ===
     renderComment,
+
+    // === V4.0: 版本管理 ===
+    documentVersions,
+    activeVersionIndex,
+    onVersionSwitch,
+    onPublishCurrentVersion,
+
+    // === V4.0: 评论总结 ===
+    feedbackSummary,
+    isSummarizing,
+    onSummarizeComments,
+    onApplyAdjustments,
+    onDismissSummary,
+    hasHumanClientComments,
 }) {
     const isMobile = useMediaQuery('(max-width: 767px)');
+    const [messageApi, contextHolder] = message.useMessage();
 
-    // ===== 渐进式展开状态 =====
-    const [viewStage, setViewStage] = useState('chat');
-    const [mobilePanel, setMobilePanel] = useState('chat');
+    // ===== 版本可见性控制 =====
+    // 根据当前角色过滤可见版本
+    const visibleVersions = React.useMemo(() => {
+        if (!documentVersions) return [];
+        if (currentRole === 'PARTY_B') {
+            // 乙方：能看到所有版本
+            return documentVersions;
+        }
+        // 甲方：只能看到 public 的版本
+        return documentVersions.filter(v =>
+            v.visibility === 'public' || !v.visibility // 兼容旧数据
+        );
+    }, [documentVersions, currentRole]);
+
+    // 检查是否有草稿版本（仅甲方使用）
+    const hasVendorDraft = React.useMemo(() => {
+        if (currentRole !== 'PARTY_A' || !documentVersions) return false;
+        return documentVersions.some(v => v.visibility === 'vendor_only');
+    }, [documentVersions, currentRole]);
+
+    // 计算在可见版本列表中的索引（用于 VersionSelector 显示）
+    const visibleActiveIndex = React.useMemo(() => {
+        if (!documentVersions || activeVersionIndex < 0) return 0;
+        const currentVersion = documentVersions[activeVersionIndex];
+        if (!currentVersion) return 0;
+        return visibleVersions.findIndex(v => v.id === currentVersion.id);
+    }, [documentVersions, activeVersionIndex, visibleVersions]);
+
+    // ===== 渐进式展开状态（按角色隔离） =====
+    const [viewStageMap, setViewStageMap] = useState({ PARTY_A: 'chat', PARTY_B: 'chat' });
+    const viewStage = viewStageMap[currentRole] || 'chat';
+    const setViewStage = useCallback((stage) => {
+        setViewStageMap(prev => ({ ...prev, [currentRole]: stage }));
+    }, [currentRole]);
+
+    const [mobilePanelMap, setMobilePanelMap] = useState({ PARTY_A: 'chat', PARTY_B: 'chat' });
+    const mobilePanel = mobilePanelMap[currentRole] || 'chat';
+    const setMobilePanel = useCallback((panel) => {
+        setMobilePanelMap(prev => ({ ...prev, [currentRole]: panel }));
+    }, [currentRole]);
+
     const [commentSheetOpen, setCommentSheetOpen] = useState(false);
 
     // ===== 状态转换回调 =====
@@ -80,7 +139,7 @@ export default function ProgressiveLayout({
             setMobilePanel('document');
         }
         setViewStage('split');
-    }, [isMobile]);
+    }, [isMobile, setMobilePanel, setViewStage]);
 
     // 高亮文字点击 → 展开评论区 + 原有逻辑
     const handleHighlightClick = useCallback((targetId) => {
@@ -93,7 +152,7 @@ export default function ProgressiveLayout({
         } else {
             setViewStage('split_comments');
         }
-    }, [isMobile, onElementClick]);
+    }, [isMobile, onElementClick, setViewStage]);
 
     // 评论区关闭
     const handleCloseComments = useCallback(() => {
@@ -102,18 +161,18 @@ export default function ProgressiveLayout({
         } else {
             setViewStage('split');
         }
-    }, [isMobile]);
+    }, [isMobile, setViewStage]);
 
     // 移动端返回聊天
     const handleBackToChat = useCallback(() => {
         setMobilePanel('chat');
         setViewStage('chat');
-    }, []);
+    }, [setMobilePanel, setViewStage]);
 
     // 桌面端关闭文档区 → 回到纯聊天
     const handleCloseDocument = useCallback(() => {
         setViewStage('chat');
-    }, []);
+    }, [setViewStage]);
 
     // 评论卡片点击（包装原回调，移动端需要切换到文档视图）
     const handleCommentClickWrapped = useCallback((id, blockId) => {
@@ -124,7 +183,7 @@ export default function ProgressiveLayout({
             setMobilePanel('document');
             setViewStage('split');
         }
-    }, [isMobile, mobilePanel, onCommentClick]);
+    }, [isMobile, mobilePanel, onCommentClick, setMobilePanel, setViewStage]);
 
     // Widget 点击回调（拦截 gateway 类型触发文档展开）
     const handleWidgetClick = useCallback((type, data) => {
@@ -133,91 +192,81 @@ export default function ProgressiveLayout({
         }
     }, [handleDocumentOpen]);
 
-    // ===== 渲染 Header =====
-    const renderHeader = () => (
-        <div className="h-14 w-full flex items-center justify-between px-5 bg-zinc-900 rounded-xl shrink-0">
-            <div className="flex items-center gap-3">
-                {/* 移动端在文档视图时显示返回按钮 */}
-                {isMobile && mobilePanel === 'document' && (
-                    <button
-                        onClick={handleBackToChat}
-                        className="text-zinc-400 hover:text-white transition-colors mr-1"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="15 18 9 12 15 6" />
-                        </svg>
-                    </button>
-                )}
+    // 乙方发起需求确认 → 发布当前版本 + 设置标志位，甲方视角显示通知横条
+    const handleSendRequirementConfirmation = useCallback(() => {
+        const { setRequirementConfirmPending, setRequirementConfirmSent } = useChatStore.getState();
 
-                <span className="font-bold text-base text-zinc-100">
-                    {isMobile && mobilePanel === 'document' ? '文档预览' : 'BizAgent'}
-                </span>
+        // 1. 将当前版本设置为 public
+        onPublishCurrentVersion?.();
 
-                {/* 角色切换 - 仅在聊天视图或桌面端显示 */}
-                {(!isMobile || mobilePanel === 'chat') && (
-                    <div className="flex bg-zinc-800 rounded-lg p-0.5 ml-4">
-                        <button
-                            onClick={() => setCurrentRole('PARTY_A')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_A'
-                                ? 'bg-[#3B82F6] text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                        >
-                            甲方
-                        </button>
-                        <button
-                            onClick={() => setCurrentRole('PARTY_B')}
-                            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${currentRole === 'PARTY_B'
-                                ? 'bg-[#3B82F6] text-white shadow-sm'
-                                : 'text-zinc-400 hover:text-zinc-200'
-                                }`}
-                        >
-                            乙方
-                        </button>
-                    </div>
-                )}
-            </div>
+        // 2. 设置需求确认标志位（甲方通知横条）
+        setRequirementConfirmPending(true);
 
-            <div className="flex items-center gap-2">
-                {/* Agent 控制 - 仅乙方 */}
-                {currentRole === 'PARTY_A' ? (
-                    <button
-                        onClick={handleAiReviewTrigger}
-                        style={{ display: 'none' }}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-black hover:bg-zinc-200 shadow-sm"
-                    >
-                        <IconAI className="w-3.5 h-3.5" />
-                        AI Review
-                    </button>
-                ) : (
-                    <div className="flex items-center gap-3 bg-zinc-800 rounded-full px-3 py-1 text-xs">
-                        {isAgentTyping && (
-                            <AgentProcessCycle onComplete={() => setIsAgentTyping(false)} />
-                        )}
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-400">启用Agent自动回复</span>
-                            <button
-                                onClick={() => setAgentEnabled(!agentEnabled)}
-                                className={`w-8 h-4 rounded-full p-0.5 transition-colors duration-300 ${agentEnabled ? 'bg-green-500' : 'bg-zinc-600'}`}
-                            >
-                                <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform duration-300 ${agentEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
-                            </button>
-                        </div>
-                    </div>
-                )}
+        // 3. 标记已发送（按钮变为不可点击纯文本）
+        setRequirementConfirmSent(true);
 
-                <button
-                    onClick={() => setIsConfigOpen(true)}
-                    className="p-2 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-white transition-colors"
-                >
-                    <IconMenu className="w-5 h-5" />
-                </button>
-            </div>
-        </div>
-    );
+        // 4. Toast 提示
+        messageApi.success('需求确认已发送至甲方');
+    }, [onPublishCurrentVersion, messageApi]);
+
+    // 甲方点击通知横条「查看需求文档」→ 注入用户消息 + 打开文档 + 清除通知
+    const handleAcceptRequirementConfirm = useCallback(() => {
+        const { setClientMessages, setRequirementConfirmPending } = useChatStore.getState();
+
+        // 1. 注入一条甲方的 user 消息，让聊天区有内容
+        setClientMessages(prev => [...prev, {
+            key: `user_view_doc_${Date.now()}`,
+            role: 'user',
+            content: '查看需求文档',
+        }]);
+
+        // 2. 打开文档区
+        setViewStage('split');
+
+        // 3. 移动端也需要切到文档面板
+        if (isMobile) {
+            setMobilePanel('document');
+        }
+
+        // 4. 清除通知横条
+        setRequirementConfirmPending(false);
+    }, [setViewStage, isMobile, setMobilePanel]);
+
+    // 从 store 读取需求确认标志位
+    const requirementConfirmPending = useChatStore(s => s.requirementConfirmPending);
+    const requirementConfirmSent = useChatStore(s => s.requirementConfirmSent);
 
     // ===== 渲染浮动工具栏（评论输入） =====
     const renderToolbar = () => {
+        // Mobile Toolbar (Fixed Bottom)
+        if (isMobile) {
+            if (!selectedText) return null;
+
+            // If input is open (BottomSheet), don't show this toolbar
+            if (commentSheetOpen) return null;
+
+            return (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <button
+                        onMouseDown={(e) => e.preventDefault()} // Prevent losing selection
+                        onClick={() => {
+                            setCommentSheetOpen(true);
+                            // Small delay to allow sheet to open before focusing? 
+                            // Actually BottomSheet usually handles focus if input is inside.
+                            // But here we need to switch mode to "inputting"
+                            setIsInputOpen(true);
+                        }}
+                        className="bg-zinc-800/90 backdrop-blur-md border border-zinc-700 shadow-2xl text-white px-6 py-3 rounded-full text-sm font-semibold flex items-center gap-2 active:scale-95 transition-transform"
+                    >
+                        <span>💬</span>
+                        <span>添加评论</span>
+                    </button>
+                    {/* Optional: Add Copy button or others here */}
+                </div>
+            );
+        }
+
+        // Desktop Toolbar (Floating near selection)
         if (!toolbarPosition) return null;
 
         return (
@@ -258,22 +307,71 @@ export default function ProgressiveLayout({
     // ===== 渲染文档区 =====
     const renderDocumentView = () => (
         <div className="h-full w-full overflow-hidden relative flex flex-col" ref={scrollContainerRef}>
-            {/* 文档区头部（桌面端带关闭按钮） */}
-            {!isMobile && (
-                <div className="h-11 flex items-center justify-between px-4 bg-zinc-900/80 shrink-0 border-b border-zinc-800/50">
-                    <span className="text-sm font-medium text-zinc-300">文档预览</span>
-                    <button
-                        onClick={handleCloseDocument}
-                        className="text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-700"
-                        title="收起文档区"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
-                    </button>
+            {/* 甲方草稿通知横条 */}
+            {currentRole === 'PARTY_A' && hasVendorDraft && (
+                <div className="shrink-0 px-4 py-2.5 bg-blue-600/10 border-b border-blue-500/20 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
+                    <span className="text-xs text-blue-200 flex-1">
+                        乙方正在根据您的反馈调整文档，调整完成后会通知您查看
+                    </span>
                 </div>
             )}
+
+            {/* 文档区头部（版本选择器 + 关闭按钮） */}
+            <div className="shrink-0">
+                {documentVersions && documentVersions.length > 0 && (
+                    <VersionSelector
+                        versions={visibleVersions}
+                        activeIndex={visibleActiveIndex}
+                        onSwitch={onVersionSwitch}
+                        rightContent={
+                            !isMobile && (
+                                <div className="flex items-center gap-2">
+                                    {currentRole === 'PARTY_B' && (
+                                        requirementConfirmSent ? (
+                                            <span className="px-3 py-1 text-xs font-medium text-zinc-400">
+                                                已发起需求确认
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={handleSendRequirementConfirmation}
+                                                className="px-3 py-1 rounded-md text-xs font-medium transition-all bg-blue-600 text-white hover:bg-blue-500"
+                                            >
+                                                发起需求确认
+                                            </button>
+                                        )
+                                    )}
+                                    <button
+                                        onClick={handleCloseDocument}
+                                        className="text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-700"
+                                        title="收起文档区"
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <line x1="18" y1="6" x2="6" y2="18" />
+                                            <line x1="6" y1="6" x2="18" y2="18" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            )
+                        }
+                    />
+                )}
+                {!documentVersions && !isMobile && (
+                    <div className="h-11 flex items-center justify-between px-4 bg-zinc-900/80 border-b border-zinc-800/50">
+                        <span className="text-sm font-medium text-zinc-300">文档预览</span>
+                        <button
+                            onClick={handleCloseDocument}
+                            className="text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-zinc-700"
+                            title="收起文档区"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                )}
+            </div>
             {/* 文档内容 */}
             <div className="flex-1 min-h-0 overflow-hidden">
                 <MockSplitView
@@ -295,16 +393,64 @@ export default function ProgressiveLayout({
 
     // ===== 渲染评论面板 =====
     const renderCommentsPanel = (showClose = true) => (
-        <CommentsPanel
-            comments={comments}
-            activeId={activeId}
-            onCommentClick={handleCommentClickWrapped}
-            onReply={onReply}
-            onDeleteComment={onDeleteComment}
-            onClose={showClose ? handleCloseComments : undefined}
-            renderComment={renderComment}
-        />
+        <div className="h-full flex flex-col">
+            <CommentsPanel
+                comments={comments}
+                activeId={activeId}
+                onCommentClick={handleCommentClickWrapped}
+                onReply={onReply}
+                onDeleteComment={onDeleteComment}
+                onClose={showClose ? handleCloseComments : undefined}
+                renderComment={renderComment}
+            />
+            {/* V4.0: 评论总结区域 - 仅乙方可见且有甲方真人评论时 */}
+            {currentRole === 'PARTY_B' && hasHumanClientComments && (
+                <div className="shrink-0 p-3 border-t border-zinc-800">
+                    {feedbackSummary ? (
+                        <FeedbackSummaryCard
+                            summary={feedbackSummary}
+                            isLoading={false}
+                            onApply={onApplyAdjustments}
+                            onDismiss={onDismissSummary}
+                        />
+                    ) : (
+                        <button
+                            onClick={onSummarizeComments}
+                            disabled={isSummarizing}
+                            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${isSummarizing
+                                ? 'bg-zinc-800 text-zinc-500 cursor-wait'
+                                : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+                                }`}
+                        >
+                            {isSummarizing ? '正在分析...' : '📊 总结所有反馈'}
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
     );
+
+    // ===== 渲染通知横条（甲方视角 + 需求确认待查看）=====
+    const renderNotificationBar = () => {
+        if (currentRole !== 'PARTY_A' || !requirementConfirmPending) return null;
+
+        return (
+            <div className="w-full flex items-center justify-between px-5 py-3 bg-blue-600/15 border border-blue-500/30 rounded-xl shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
+                    <span className="text-sm text-blue-200 truncate">
+                        乙方发起了项目的需求文档确认，请查看
+                    </span>
+                </div>
+                <button
+                    onClick={handleAcceptRequirementConfirm}
+                    className="ml-4 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white hover:bg-blue-500 shrink-0"
+                >
+                    查看需求文档
+                </button>
+            </div>
+        );
+    };
 
     // ==========================================
     // 移动端布局
@@ -312,8 +458,26 @@ export default function ProgressiveLayout({
     if (isMobile) {
         return (
             <div className="absolute inset-0 flex flex-col text-white font-sans overflow-hidden">
-                {/* Header */}
-                {renderHeader()}
+                {contextHolder}
+
+                {/* Mobile Header (Dedicated Component) */}
+                <MobileHeader
+                    mobilePanel={mobilePanel}
+                    handleBackToChat={handleBackToChat}
+                    currentRole={currentRole}
+                    setCurrentRole={setCurrentRole}
+                    // agentEnabled & isAgentTyping handled inside MobileHeader via store or passed from here if we fetch from store
+                    setIsConfigOpen={setIsConfigOpen}
+                    documentVersions={documentVersions}
+                    activeVersionIndex={visibleActiveIndex} // Use mapped index
+                    onVersionSwitch={onVersionSwitch}
+                    handleSendRequirementConfirmation={handleSendRequirementConfirmation}
+                    requirementConfirmSent={requirementConfirmSent}
+                    sidebarRef={sidebarRef}
+                />
+
+                {/* 通知横条 */}
+                {renderNotificationBar()}
 
                 {/* 内容区域（页面切换动画） */}
                 <div className="flex-1 min-h-0 overflow-hidden relative">
@@ -352,13 +516,58 @@ export default function ProgressiveLayout({
                     </AnimatePresence>
                 </div>
 
-                {/* BottomSheet 评论抽屉 */}
+                {/* BottomSheet 评论抽屉 (兼顾评论列表和新建评论输入) */}
                 <BottomSheet
                     isOpen={commentSheetOpen}
-                    onClose={() => setCommentSheetOpen(false)}
-                    title={`评论 (${comments.length})`}
+                    onClose={() => {
+                        setCommentSheetOpen(false);
+                        setIsInputOpen(false); // Reset input state on close
+                    }}
+                    title={isInputOpen ? "发表评论" : `评论 (${comments.length})`}
                 >
-                    {renderCommentsPanel(false)}
+                    {isInputOpen ? (
+                        // Mobile Comment Input Mode
+                        <div className="flex flex-col gap-4 pt-2">
+                            <div className="text-xs text-zinc-400 border-l-2 border-yellow-500 pl-2 truncate">
+                                引用: &quot;{selectedText}&quot;
+                            </div>
+                            <textarea
+                                autoFocus
+                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-base text-white resize-none focus:outline-none focus:border-blue-500 placeholder-zinc-500"
+                                rows={4}
+                                placeholder="写下你的想法..."
+                                value={inputValue}
+                                onChange={e => setInputValue(e.target.value)}
+                            // Mobile usually doesn't submit on Enter, but we can support it or rely on button
+                            />
+                            <div className="flex justify-end gap-3 mt-2">
+                                <button
+                                    onClick={() => {
+                                        setIsInputOpen(false);
+                                        setCommentSheetOpen(false);
+                                    }}
+                                    className="px-5 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white bg-zinc-800"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        onSubmit();
+                                        setIsInputOpen(false);
+                                        setCommentSheetOpen(false); // Close sheet after submit
+                                    }}
+                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white shadow-lg transition-colors ${inputValue.trim() ? 'bg-blue-600 hover:bg-blue-500' : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                                        }`}
+                                    disabled={!inputValue.trim()}
+                                >
+                                    发布
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        // Regular Comment List Mode
+                        renderCommentsPanel(false)
+                    )}
                 </BottomSheet>
             </div>
         );
@@ -368,13 +577,24 @@ export default function ProgressiveLayout({
     // 桌面端布局
     // ==========================================
 
-    // 动画配置
     const slideTransition = { duration: 0.4, ease: [0.4, 0, 0.2, 1] };
 
     return (
         <div className="absolute inset-4 flex flex-col text-white font-sans overflow-hidden gap-4">
-            {/* Header */}
-            {renderHeader()}
+            {contextHolder}
+
+            {/* Desktop Header (Dedicated Component) */}
+            <DesktopHeader
+                currentRole={currentRole}
+                setCurrentRole={setCurrentRole}
+                // agentEnabled & isAgentTyping handled inside DesktopHeader via store
+                setIsConfigOpen={setIsConfigOpen}
+                sidebarRef={sidebarRef}
+                onTriggerAiReview={handleAiReviewTrigger}
+            />
+
+            {/* 通知横条 */}
+            {renderNotificationBar()}
 
             {/* 内容区域 */}
             <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">

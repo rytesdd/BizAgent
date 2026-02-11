@@ -19,6 +19,7 @@ import NotificationCard from './cards/NotificationCard';
 import FeatureListCard from './cards/FeatureListCard';
 import TodoCard from './cards/TodoCard';
 import AlertCard from './cards/AlertCard';
+import AgentControlCard from './cards/AgentControlCard';
 
 
 /**
@@ -32,6 +33,7 @@ const WIDGET_COMPONENTS = {
     feature_list: FeatureListCard,
     todo: TodoCard,
     alert: AlertCard,
+    agent_control: AgentControlCard,
 };
 
 /**

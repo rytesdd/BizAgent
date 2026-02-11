@@ -112,7 +112,7 @@ const Highlighter = ({ text, blockId, comments = [], activeCommentId, onElementC
 const MockSplitView = ({ activeCommentId, activeUiId, onSelectElement, onTextSelect, isFallbackActive, isLegacyMode, isThinking, isReviewing, comments = [] }) => {
 
     // --- Selection Handler ---
-    const handleMouseUp = useCallback((e) => {
+    const handleSelection = useCallback(() => {
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) return;
 
@@ -145,6 +145,35 @@ const MockSplitView = ({ activeCommentId, activeUiId, onSelectElement, onTextSel
             }
         }
     }, [onTextSelect]);
+
+    // Mouse Up (Desktop)
+    const handleMouseUp = useCallback((e) => {
+        handleSelection();
+    }, [handleSelection]);
+
+    // Mobile Selection Listening
+    // On mobile, selectionchange is the most reliable way to detect selection end/change
+    useEffect(() => {
+        let debounceTimer;
+
+        const handleSelectionChange = () => {
+            // Debounce to avoid firing while dragging handles
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed) {
+                    handleSelection();
+                }
+            }, 600); // 600ms debounce to wait for selection gesture to finish
+        };
+
+        document.addEventListener('selectionchange', handleSelectionChange);
+
+        return () => {
+            document.removeEventListener('selectionchange', handleSelectionChange);
+            clearTimeout(debounceTimer);
+        };
+    }, [handleSelection]);
 
     // UI Highlight Style
     const uiHighlightStyle = {

@@ -8,6 +8,8 @@ import { IconSend } from '../svg-icons';
 import { DOCUMENT_CONTENT } from '../data/documentModel';
 import { sendMessageToKimi, sendSimpleChat, extractJsonFromText } from '../services/kimiService';
 import { eventBus, EVENTS } from '../utils/eventBus';
+
+import { useChatStore } from '../store/chatStore';
 import axios from 'axios';
 
 
@@ -259,7 +261,7 @@ const SEED_COMMENTS_SANDBOX = [
 
 
 // LocalStorage keys for persistence
-const VERSIONS_STORAGE_KEY = 'dualrole_v4_versions';
+const VERSIONS_STORAGE_KEY = 'dualrole_v4_versions_v2';
 
 // ==========================================
 // AGENT PERSONA TEMPLATES
@@ -340,7 +342,7 @@ const loadVersionsFromStorage = () => {
     }];
 };
 
-export default function DualRoleView() {
+export default function DualRoleViewV2() {
     // --- State ---
     const [activeId, setActiveId] = useState(null);
     const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -348,6 +350,14 @@ export default function DualRoleView() {
     // --- 文档版本管理（每个版本包含独立的 comments 数组）---
     const [documentVersions, setDocumentVersions] = useState(loadVersionsFromStorage);
     const [activeVersionIndex, setActiveVersionIndex] = useState(0);
+
+    // Import store for Agent state
+    const {
+        agentEnabled,
+        setAgentEnabled,
+        isAgentTyping,
+        setIsAgentTyping
+    } = useChatStore();
 
     // 当前文档内容 = 当前激活版本的快照
     const documentContent = React.useMemo(
@@ -614,8 +624,9 @@ ${actionsText}
     // AI States (Party A)
 
     // Agent States (Party B)
-    const [agentEnabled, setAgentEnabled] = useState(false);
-    const [isAgentTyping, setIsAgentTyping] = useState(false);
+    // Agent States (Party B) - Now managed by chatStore
+    // const [agentEnabled, setAgentEnabled] = useState(false);
+    // const [isAgentTyping, setIsAgentTyping] = useState(false);
 
     // Selection / Toolbar State
     const [selectedText, setSelectedText] = useState('');

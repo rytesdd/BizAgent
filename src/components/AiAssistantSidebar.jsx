@@ -9,14 +9,14 @@ import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } f
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { Bubble, Sender } from '@ant-design/x';
 import { ConfigProvider, theme } from 'antd';
-import { sendMessageToKimi } from '../services/kimiService';
+import { sendMessageToKimi, sendPersonaChat, sendPersonaChatStream } from '../services/kimiService';
 import { reviewDocumentStream } from '../services/reviewService';
 import { DOCUMENT_CONTENT } from '../data/documentModel';
 import ThinkingAccordion from './ThinkingAccordion';
 import MessageRenderer from './MessageRenderer';
 import AiPersonaConfigModal from './AiPersonaConfigModal';
-import { sendPersonaChat } from '../services/kimiService';
 import { useChatStore } from '../store/chatStore';
+import useMediaQuery from '../hooks/useMediaQuery';
 
 // ==========================================
 // Icon Components
@@ -84,14 +84,27 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
         setIsReviewing,
         thinkingLog,
         setThinkingLog,
+        setAgentEnabled, // Import action
+        agentEnabled     // Import state
     } = useChatStore();
+
+    // Mobile Detection
+    const isMobile = useMediaQuery('(max-width: 767px)');
 
     // 根据当前角色动态选择消息状态
     const messages = (currentRole === 'PARTY_A' ? clientMessages : vendorMessages) || [];
     const setMessages = currentRole === 'PARTY_A' ? setClientMessages : setVendorMessages;
 
-    // 是否已发送过消息（控制输入框居中→底部动画，每个窗口独立）
-    const [hasInteracted, setHasInteracted] = useState(false);
+    // 是否已发送过消息（控制输入框居中→底部动画）
+    // 按角色隔离，避免乙方交互后切换甲方也变成底部状态
+    const [hasInteractedMap, setHasInteractedMap] = useState(() => ({
+        PARTY_A: (clientMessages || []).length > 1,
+        PARTY_B: (vendorMessages || []).length > 1,
+    }));
+    const hasInteracted = hasInteractedMap[currentRole] || false;
+    const setHasInteracted = (val) => {
+        setHasInteractedMap(prev => ({ ...prev, [currentRole]: val }));
+    };
     const showCentered = !hasInteracted && !isSidebar;
 
     // Persona Config State (局部 UI 状态，不需要持久化)
@@ -106,12 +119,13 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
 
     const scrollRef = useRef(null);
 
-    // Expose triggerReview method to parent
+    // Expose methods to parent
     useImperativeHandle(ref, () => ({
         triggerReview: async () => {
-            // We can trigger the auto review by calling handleSend with a special flag
-            // OR directly invoking logic. Since handleSend is inside, we can just call it.
             await handleSend(null, true);
+        },
+        openPersonaConfig: () => {
+            setIsConfigOpen(true);
         }
     }));
 
@@ -136,6 +150,66 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
     const handleSend = async (content, isAutoReview = false, intent = null) => {
         // Allow empty content if it's an auto-review trigger (which sends a system prompt instruction as user message equivalent)
         if (!isAutoReview && (!content || !content.trim())) return;
+
+        // ========================================
+        // MOBILE COMMAND INTERCEPTION: Agent Control
+        // ========================================
+        if (isMobile && content) {
+            const cmd = content.trim().toLowerCase();
+            const isEnableCmd = cmd.includes('开启') && cmd.includes('自动回复');
+            const isDisableCmd = (cmd.includes('停止') || cmd.includes('关闭')) && cmd.includes('自动回复');
+            if (isEnableCmd || isDisableCmd) {
+                const shouldEnable = isEnableCmd;
+
+                // 1. Add User Message
+                setMessages(prev => [...prev, {
+                    key: `user_${Date.now()}`,
+                    role: 'user',
+                    content: cmd
+                }]);
+                setInputValue('');
+                if (!hasInteracted) setHasInteracted(true);
+                setLoading(true);
+
+                // 2. Perform Action (Update Store)
+                setAgentEnabled(shouldEnable);
+
+                // 3. Simulate "Thinking..."
+                const aiMessageId = `ai_cmd_${Date.now()}`;
+                setMessages(prev => [...prev, {
+                    key: aiMessageId,
+                    role: 'ai',
+                    content: '',
+                    thoughtContent: '正在根据指令调整配置...',
+                    isThinking: true,
+                    widgets: []
+                }]);
+
+                setTimeout(() => {
+                    const controlWidget = {
+                        type: 'agent_control',
+                        data: { enabled: shouldEnable }
+                    };
+
+                    setMessages(prev => prev.map(msg =>
+                        msg.key === aiMessageId
+                            ? {
+                                ...msg,
+                                isThinking: false,
+                                thoughtContent: '配置已更新。',
+                                contentBlocks: [
+                                    { type: 'markdown', content: shouldEnable ? '已为您开启 AI 自动回复模式。' : 'AI 自动回复已暂停。' },
+                                    { type: 'component_group', widgets: [controlWidget] }
+                                ]
+                            }
+                            : msg
+                    ));
+                    setLoading(false);
+                }, 1000); // 1s fake thinking delay
+
+                return; // INTERCEPTED - Do not proceed to API
+            }
+        }
 
         // ========================================
         // DEBUG: /test_cards command
@@ -464,8 +538,7 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                 return;
             }
 
-            // --- NORMAL CHAT MODE (Use Persona Engine) ---
-            // If not auto-review, use the new Persona Engine
+            // --- NORMAL CHAT MODE (Use Persona Engine - Streaming with Real Thinking) ---
             if (!isAutoReview) {
                 const currentPersona = currentRole === 'PARTY_A' ? 'client' : 'vendor';
                 const currentConfig = personaConfig[currentPersona];
@@ -476,11 +549,9 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                     .slice(-10)
                     .map(m => {
                         let msgContent = '';
-                        // 优先使用 string content
                         if (typeof m.content === 'string' && m.content.trim()) {
                             msgContent = m.content;
                         } else if (m.contentBlocks && m.contentBlocks.length > 0) {
-                            // 从 contentBlocks（Narrative Engine 格式）中提取文本
                             msgContent = m.contentBlocks
                                 .filter(b => b.type === 'markdown' && b.content)
                                 .map(b => b.content)
@@ -488,7 +559,6 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                         } else if (m.content && typeof m.content !== 'string') {
                             msgContent = JSON.stringify(m.content);
                         }
-                        // 确保 content 永远不为空（API 会拒绝空消息）
                         if (!msgContent) {
                             msgContent = m.role === 'ai' ? '(已回复)' : '(空消息)';
                         }
@@ -498,44 +568,68 @@ const AiAssistantSidebar = forwardRef(({ onTriggerAiReview, currentRole = 'PARTY
                         };
                     });
 
-                // Add current user prompt
                 historyForBackend.push({ role: 'user', content: userPrompt });
 
-                // Call Persona Chat API
-                const data = await sendPersonaChat(
-                    historyForBackend,
-                    currentPersona,
-                    currentConfig,
-                    intent
-                );
+                // 创建 AbortController
+                abortControllerRef.current = new AbortController();
 
-                // Parse response: extract markdown content and widgets
-                const responseWidgets = data.widgets || [];
-                let contentBlocks = [];
-                let fallbackContent = "";
+                // 使用流式 API，实时展示思考过程
+                await sendPersonaChatStream({
+                    messages: historyForBackend,
+                    persona: currentPersona,
+                    config: currentConfig,
+                    intent,
+                    signal: abortControllerRef.current.signal,
+                    onDelta: (chunk) => {
+                        // 可选：记录所有 delta
+                    },
+                    onThinking: (thinkingContent) => {
+                        // 实时更新思考日志到消息
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? { ...msg, thoughtContent: thinkingContent }
+                                : msg
+                        ));
+                    },
+                    onComplete: ({ widgets, thinkingContent }) => {
+                        console.log('[AiAssistant] Persona stream complete:', {
+                            widgetCount: widgets.length,
+                            thinkingLength: thinkingContent.length
+                        });
 
-                // Use the mixed stream (Narrative Engine)
-                if (responseWidgets.length > 0) {
-                    contentBlocks = responseWidgets;
-                } else if (data._debug?.raw) {
-                    // Fallback if no widgets parsed but raw text exists
-                    fallbackContent = data._debug.raw;
-                }
+                        const contentBlocks = widgets.length > 0 ? widgets : [];
+                        const fallbackContent = widgets.length === 0 ? '抱歉，未能生成有效响应。' : '';
 
-                setMessages(prev => prev.map(msg =>
-                    msg.key === aiMessageId
-                        ? {
-                            ...msg,
-                            isThinking: false,
-                            contentBlocks: contentBlocks, // MIXED STREAM: Text + Cards interleaved
-                            content: fallbackContent,     // Legacy fallback
-                            widgets: [],                  // Clear legacy widgets to avoid duplication
-                            thoughtContent: "",
-                        }
-                        : msg
-                ));
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? {
+                                    ...msg,
+                                    isThinking: false,
+                                    contentBlocks,
+                                    content: fallbackContent,
+                                    widgets: [],
+                                    thoughtContent: thinkingContent,
+                                }
+                                : msg
+                        ));
 
-                setLoading(false);
+                        setLoading(false);
+                    },
+                    onError: (error) => {
+                        console.error('[AiAssistant] Persona stream error:', error);
+                        setMessages(prev => prev.map(msg =>
+                            msg.key === aiMessageId
+                                ? {
+                                    ...msg,
+                                    isThinking: false,
+                                    content: `请求过程中发生错误: ${error.message}`,
+                                }
+                                : msg
+                        ));
+                        setLoading(false);
+                    }
+                });
+
                 return;
             }
 
@@ -794,242 +888,244 @@ ${reviewInstructions}
             }}
         >
             <LayoutGroup>
-            <div className="w-full h-full flex flex-col rounded-xl overflow-hidden chat-panel-dark">
-                {/* --- Header --- */}
-                <div className="h-14 flex items-center justify-between px-4 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="font-semibold text-zinc-100">BizAgent</span>
-                    </div>
-                    <button
-                        onClick={() => setIsConfigOpen(true)}
-                        className="p-2 -mr-2 text-zinc-400 hover:text-zinc-100 transition-colors rounded-full hover:bg-zinc-800"
-                        title="AI 人设配置"
-                    >
-                        <IconSettings className="w-5 h-5" />
-                    </button>
-                </div>
+                <div className="w-full h-full flex flex-col rounded-xl overflow-hidden chat-panel-dark">
+                    {/* Header 已移至 ProgressiveLayout，此处不再渲染 */}
 
-                <AiPersonaConfigModal
-                    isOpen={isConfigOpen}
-                    onClose={() => setIsConfigOpen(false)}
-                    onSave={handleConfigSave}
-                    initialConfig={personaConfig}
-                />
+                    <AiPersonaConfigModal
+                        isOpen={isConfigOpen}
+                        onClose={() => setIsConfigOpen(false)}
+                        onSave={handleConfigSave}
+                        initialConfig={personaConfig}
+                    />
 
-                {/* ===== 阶段 A：初始态 — 输入框居中 ===== */}
-                {showCentered && (
-                    <div className="flex-1 flex items-center justify-center px-4">
-                        <motion.div
-                            layoutId="chat-input-area"
-                            className="w-full max-w-2xl"
-                            transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-                        >
-                            {/* 快捷指令 */}
-                            <div className="flex flex-wrap gap-2 mb-3 w-full">
-                                <button
-                                    onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    全套分析
-                                </button>
-                                <button
-                                    onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看赢单率
-                                </button>
-                                <button
-                                    onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看风险
-                                </button>
-                                <button
-                                    onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看关键人
-                                </button>
+                    {/* ===== 阶段 A：初始态 — 输入框居中 ===== */}
+                    {showCentered && (
+                        <div className="flex-1 flex items-center justify-center px-4">
+                            <div className="w-full max-w-2xl flex flex-col items-center">
+                                {/* BizAgent 标题 */}
+                                <h1 className="text-2xl font-semibold text-zinc-100 mb-8 hidden" style={{ fontSize: '20px' }}>
+                                    BizAgent
+                                </h1>
+
+                                {/* 欢迎语 - 仅乙方显示 */}
+                                {currentRole === 'PARTY_B' && (
+                                    <div className="w-full mb-8">
+                                        <h2 className="text-zinc-100 text-left mb-2" style={{ fontSize: '24px' }}>
+                                            Hi，张明明
+                                        </h2>
+                                        <p className="text-sm text-zinc-400 leading-relaxed text-left">
+                                            你是蓝海软件的大客户经理，你们为客户提供基于LLM的产设研一体化解决方案，我可以帮助你完成线索挖掘、需求分析、方案生成等任务。
+                                        </p>
+                                    </div>
+                                )}
+
+                                {/* 快捷指令 - 仅在乙方视角下显示 */}
+                                {currentRole === 'PARTY_B' && (
+                                    <div className="flex flex-wrap gap-2 mb-3 w-full">
+                                        <button
+                                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            全套分析
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看赢单率
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看风险
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看关键人
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Sender */}
+                                <Sender
+                                    loading={loading}
+                                    value={inputValue}
+                                    onChange={setInputValue}
+                                    onSubmit={(v) => handleSend(v, false)}
+                                    placeholder="输入或将文件拖至此处..."
+                                    className="relative overflow-hidden"
+                                    style={{
+                                        height: 64,
+                                        background: '#27272a',
+                                        borderRadius: 20,
+                                        border: '1px solid #3f3f46',
+                                        boxShadow: 'none',
+                                    }}
+                                    styles={{
+                                        content: {
+                                            height: '100%',
+                                            padding: 0,
+                                            alignItems: 'stretch',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                        },
+                                        input: {
+                                            height: '100%',
+                                            resize: 'none',
+                                            background: 'transparent',
+                                            color: '#e4e4e7',
+                                            padding: '16px 60px 16px 20px',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                            outline: 'none',
+                                            fontSize: 12,
+                                            lineHeight: '20px',
+                                        },
+                                        suffix: {
+                                            position: 'absolute',
+                                            bottom: 10,
+                                            right: 16,
+                                            margin: 0,
+                                            padding: 0,
+                                        },
+                                    }}
+                                />
                             </div>
-                            {/* Sender */}
-                            <Sender
-                                loading={loading}
-                                value={inputValue}
-                                onChange={setInputValue}
-                                onSubmit={(v) => handleSend(v, false)}
-                                placeholder="输入或将文件拖至此处..."
-                                className="relative overflow-hidden"
-                                style={{
-                                    height: 64,
-                                    background: '#27272a',
-                                    borderRadius: 20,
-                                    border: '1px solid #3f3f46',
-                                    boxShadow: 'none',
-                                }}
-                                styles={{
-                                    content: {
-                                        height: '100%',
-                                        padding: 0,
-                                        alignItems: 'stretch',
-                                        border: 'none',
-                                        boxShadow: 'none',
-                                    },
-                                    input: {
-                                        height: '100%',
-                                        resize: 'none',
-                                        background: 'transparent',
-                                        color: '#e4e4e7',
-                                        padding: '16px 60px 16px 20px',
-                                        border: 'none',
-                                        boxShadow: 'none',
-                                        outline: 'none',
-                                        fontSize: 12,
-                                        lineHeight: '20px',
-                                    },
-                                    suffix: {
-                                        position: 'absolute',
-                                        bottom: 10,
-                                        right: 16,
-                                        margin: 0,
-                                        padding: 0,
-                                    },
-                                }}
-                            />
-                        </motion.div>
-                    </div>
-                )}
-
-                {/* ===== 阶段 B：已交互态 — 消息列表 + 输入框在底部 ===== */}
-                {!showCentered && (
-                    <>
-                        {/* --- Message List (Scrollable) --- */}
-                        <div
-                            ref={scrollRef}
-                            className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
-                        >
-                            {messages.map((msg) => (
-                                <div
-                                    key={msg.key}
-                                    className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                                >
-                                    {msg.role === 'ai' ? null : <UserAvatar />}
-                                    <Bubble
-                                        placement={msg.role === 'user' ? 'end' : 'start'}
-                                        content={renderBubbleContent(msg)}
-                                        styles={{
-                                            content: {
-                                                maxWidth: msg.role === 'user' ? '220px' : '100%',
-                                                width: msg.role === 'user' ? 'auto' : '100%',
-                                                background: msg.role === 'user' ? '#3f3f46' : 'transparent',
-                                                border: msg.role === 'user' ? '1px solid #52525b' : 'none',
-                                                borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
-                                                padding: msg.role === 'user' ? '12px 16px' : '0',
-                                                color: '#e4e4e7',
-                                                overflow: 'hidden',
-                                            }
-                                        }}
-                                    />
-                                </div>
-                            ))}
                         </div>
+                    )}
 
-                        {/* --- Input Area（底部） --- */}
-                        <motion.div
-                            layoutId="chat-input-area"
-                            style={{
-                                width: '100%',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                padding: '0 16px 48px 16px',
-                                boxSizing: 'border-box',
-                                flexShrink: 0,
-                            }}
-                            transition={{ layout: { duration: 0.5, ease: [0.4, 0, 0.2, 1] } }}
-                        >
-                            {/* 快捷指令 */}
-                            <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
-                                <button
-                                    onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    全套分析
-                                </button>
-                                <button
-                                    onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看赢单率
-                                </button>
-                                <button
-                                    onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看风险
-                                </button>
-                                <button
-                                    onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
-                                    disabled={loading}
-                                    className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    看关键人
-                                </button>
+                    {/* ===== 阶段 B：已交互态 — 消息列表 + 输入框在底部 ===== */}
+                    {!showCentered && (
+                        <>
+                            {/* --- Message List (Scrollable) --- */}
+                            <div
+                                ref={scrollRef}
+                                className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+                            >
+                                {messages.map((msg) => (
+                                    <div
+                                        key={msg.key}
+                                        className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                                    >
+                                        {msg.role === 'ai' ? null : <UserAvatar />}
+                                        <Bubble
+                                            placement={msg.role === 'user' ? 'end' : 'start'}
+                                            content={renderBubbleContent(msg)}
+                                            styles={{
+                                                content: {
+                                                    maxWidth: msg.role === 'user' ? '220px' : '100%',
+                                                    width: msg.role === 'user' ? 'auto' : '100%',
+                                                    background: msg.role === 'user' ? '#3f3f46' : 'transparent',
+                                                    border: msg.role === 'user' ? '1px solid #52525b' : 'none',
+                                                    borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '0',
+                                                    padding: msg.role === 'user' ? '12px 16px' : '0',
+                                                    color: '#e4e4e7',
+                                                    overflow: 'hidden',
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                ))}
                             </div>
-                            {/* Sender */}
-                            <Sender
-                                loading={loading}
-                                value={inputValue}
-                                onChange={setInputValue}
-                                onSubmit={(v) => handleSend(v, false)}
-                                placeholder="输入或将文件拖至此处..."
-                                className="relative overflow-hidden"
+
+                            {/* --- Input Area（底部） --- */}
+                            <div
                                 style={{
-                                    height: 64,
-                                    background: '#27272a',
-                                    borderRadius: 20,
-                                    border: '1px solid #3f3f46',
-                                    boxShadow: 'none',
+                                    width: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    padding: '0 16px 48px 16px',
+                                    boxSizing: 'border-box',
+                                    flexShrink: 0,
                                 }}
-                                styles={{
-                                    content: {
-                                        height: '100%',
-                                        padding: 0,
-                                        alignItems: 'stretch',
-                                        border: 'none',
+                            >
+                                {/* 快捷指令 - 仅在乙方视角下显示 */}
+                                {currentRole === 'PARTY_B' && (
+                                    <div className="flex flex-wrap gap-2 mb-3 mt-3 w-full shrink-0">
+                                        <button
+                                            onClick={() => handleSend("帮我全面分析一下这个项目的赢率、潜在风险、关键决策人以及下一步行动计划。", false, 'full')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            全套分析
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("深入分析一下这个项目的赢单胜率和ROI情况", false, 'win_rate')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看赢单率
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("分析一下当前面临的紧急风险和竞争威胁", false, 'risk')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看风险
+                                        </button>
+                                        <button
+                                            onClick={() => handleSend("谁是这个项目的关键决策人？分析其立场和应对策略", false, 'key_person')}
+                                            disabled={loading}
+                                            className={`px-3 py-1.5 rounded-full bg-[#1F1F1F] border border-[#333] hover:bg-[#2A2A2A] hover:border-[#444] transition-all text-xs text-zinc-400 font-medium hover:text-zinc-200 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            看关键人
+                                        </button>
+                                    </div>
+                                )}
+                                {/* Sender */}
+                                <Sender
+                                    loading={loading}
+                                    value={inputValue}
+                                    onChange={setInputValue}
+                                    onSubmit={(v) => handleSend(v, false)}
+                                    placeholder="输入或将文件拖至此处..."
+                                    className="relative overflow-hidden"
+                                    style={{
+                                        height: 64,
+                                        background: '#27272a',
+                                        borderRadius: 20,
+                                        border: '1px solid #3f3f46',
                                         boxShadow: 'none',
-                                    },
-                                    input: {
-                                        height: '100%',
-                                        resize: 'none',
-                                        background: 'transparent',
-                                        color: '#e4e4e7',
-                                        padding: '16px 60px 16px 20px',
-                                        border: 'none',
-                                        boxShadow: 'none',
-                                        outline: 'none',
-                                        fontSize: 12,
-                                        lineHeight: '20px',
-                                    },
-                                    suffix: {
-                                        position: 'absolute',
-                                        bottom: 10,
-                                        right: 16,
-                                        margin: 0,
-                                        padding: 0,
-                                    },
-                                }}
-                            />
-                        </motion.div>
-                    </>
-                )}
-            </div>
+                                    }}
+                                    styles={{
+                                        content: {
+                                            height: '100%',
+                                            padding: 0,
+                                            alignItems: 'stretch',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                        },
+                                        input: {
+                                            height: '100%',
+                                            resize: 'none',
+                                            background: 'transparent',
+                                            color: '#e4e4e7',
+                                            padding: '16px 60px 16px 20px',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                            outline: 'none',
+                                            fontSize: 12,
+                                            lineHeight: '20px',
+                                        },
+                                        suffix: {
+                                            position: 'absolute',
+                                            bottom: 10,
+                                            right: 16,
+                                            margin: 0,
+                                            padding: 0,
+                                        },
+                                    }}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
             </LayoutGroup>
         </ConfigProvider>
     );

@@ -1,0 +1,36 @@
+.mobile-menu-overlay .ant-dropdown-menu {
+    background-color: #1f1f22 !important;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    padding: 6px;
+    min-width: 240px;
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-menu-overlay .ant-dropdown-menu-item-group-title {
+    color: #52525b;
+    font-size: 10px;
+    padding: 4px 12px;
+}
+
+.mobile-menu-overlay .ant-dropdown-menu-item {
+    color: #e4e4e7 !important;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.mobile-menu-overlay .ant-dropdown-menu-item:hover {
+    background-color: #27272a !important;
+}
+
+.mobile-menu-overlay .ant-dropdown-menu-item-divider {
+    background-color: #27272a;
+    margin: 4px 0;
+}
+
+/* Hide global AppVersionSwitch on mobile if simple media query isn't enough */
+@media (max-width: 768px) {
+    .fixed.top-3.right-3.z-\[9999\] {
+        display: none !important;
+    }
+}

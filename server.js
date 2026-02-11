@@ -163,7 +163,9 @@ app.get("/api/ai/ollama-models", async (req, res) => {
 // ============================================
 
 app.post("/api/ai/chat", aiController.chat);
+app.post("/api/ai/simple-chat", aiController.simpleChat);
 app.post("/api/ai/persona-chat", aiController.personaChat);
+app.post("/api/ai/persona-chat-stream", aiController.personaChatStream);
 
 // ============================================
 // API: 文件解析状态
@@ -1252,7 +1254,7 @@ try {
 const aiStatus = aiService.getStatus();
 logStep(`AI 服务状态`, aiStatus);
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logStep(`服务已启动 http://localhost:${PORT}`);
   logStep(`AI Provider: ${aiStatus.provider}, Model: ${aiStatus.model}`);
 });
