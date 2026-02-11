@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
  * - 向下拖拽关闭（速度 > 500px/s 或偏移 > 100px）
  * - 处理触摸滚动冲突：当内部滚动到顶部时才允许拖拽
  */
-export default function BottomSheet({ isOpen, onClose, children, title }) {
+export default function BottomSheet({ isOpen, onClose, children, title, footer }) {
     const [heightPercent, setHeightPercent] = useState(0.4);
     const sheetRef = useRef(null);
     const scrollRef = useRef(null);
@@ -90,6 +90,7 @@ export default function BottomSheet({ isOpen, onClose, children, title }) {
                         transition={{ duration: 0.2 }}
                         onClick={onClose}
                         className="fixed inset-0 bg-black/60 z-40"
+                        style={{ touchAction: 'none' }} // Risk #2: 防止滚动穿透
                     />
 
                     {/* Sheet 主体 */}
@@ -140,10 +141,22 @@ export default function BottomSheet({ isOpen, onClose, children, title }) {
                         {/* 内容区域 */}
                         <div
                             ref={scrollRef}
-                            className="flex-1 overflow-y-auto px-4 pb-8"
+                            className="flex-1 overflow-y-auto px-4 pb-4"
+                            onClick={(e) => e.stopPropagation()} // 防止点击内容触发意想不到的 Sheet 行为
                         >
                             {children}
                         </div>
+
+                        {/* 底部 Footer (固定区域) */}
+                        {footer && (
+                            <div
+                                className="shrink-0 border-t border-zinc-800 bg-zinc-900 pb-safe"
+                                onPointerDown={(e) => e.stopPropagation()} // 阻止拖拽手势传播 (Risk #4)
+                                onTouchStart={(e) => e.stopPropagation()}
+                            >
+                                {footer}
+                            </div>
+                        )}
                     </motion.div>
                 </>
             )}

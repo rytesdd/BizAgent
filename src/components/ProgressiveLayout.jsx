@@ -236,6 +236,46 @@ export default function ProgressiveLayout({
     const requirementConfirmPending = useChatStore(s => s.requirementConfirmPending);
     const requirementConfirmSent = useChatStore(s => s.requirementConfirmSent);
 
+    // ===== 自动避让逻辑 (Mobile Auto-Scroll) =====
+    // 当 BottomSheet 打开时，确保高亮区域不被遮挡
+    React.useEffect(() => {
+        if (!isMobile || !commentSheetOpen || !activeId) return;
+
+        // 延迟执行，等待 BottomSheet 动画开始或 DOM 渲染就绪
+        const timer = setTimeout(() => {
+            // 1. 找到对应的评论数据
+            const comment = comments.find(c => c.id === activeId);
+            if (!comment || !comment.anchor?.blockId) return;
+
+            // 2. 找到对应的高亮 Block 元素
+            const blockEl = document.getElementById(comment.anchor.blockId);
+            if (!blockEl) return;
+
+            // 3. 计算位置
+            const rect = blockEl.getBoundingClientRect();
+            // 假设 BottomSheet 初始高度为 40%，预留一些安全边距
+            const sheetHeight = window.innerHeight * 0.4;
+            const visibleBottom = window.innerHeight - sheetHeight - 50; // 50px 安全边距
+
+            // 4. 如果元素底部被遮挡，通过 scrollContainerRef 滚动
+            // 注意：这里我们移动的是 scrollContainerRef，而不是 window
+            if (rect.bottom > visibleBottom) {
+                // 计算需要滚动的距离
+                // 我们希望元素显示在可视区域中间偏上位置
+                const targetTop = rect.top - (visibleBottom / 2) + (rect.height / 2); // 粗略居中
+
+                // 使用 scrollBy 进行平滑滚动
+                // 或者使用 scrollIntoView (Risk Mitigation #3)
+                blockEl.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center', // 垂直居中，最稳妥的策略
+                });
+            }
+        }, 100); // 100ms 延迟，确保 Sheet 已经占据空间逻辑（虽然是 fixed，但防止动画冲突）
+
+        return () => clearTimeout(timer);
+    }, [isMobile, commentSheetOpen, activeId, comments]);
+
     // ===== 渲染浮动工具栏（评论输入） =====
     const renderToolbar = () => {
         // Mobile Toolbar (Fixed Bottom)
@@ -523,51 +563,68 @@ export default function ProgressiveLayout({
                         setCommentSheetOpen(false);
                         setIsInputOpen(false); // Reset input state on close
                     }}
-                    title={isInputOpen ? "发表评论" : `评论 (${comments.length})`}
-                >
-                    {isInputOpen ? (
-                        // Mobile Comment Input Mode
-                        <div className="flex flex-col gap-4 pt-2">
-                            <div className="text-xs text-zinc-400 border-l-2 border-yellow-500 pl-2 truncate">
-                                引用: &quot;{selectedText}&quot;
-                            </div>
-                            <textarea
-                                autoFocus
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-base text-white resize-none focus:outline-none focus:border-blue-500 placeholder-zinc-500"
-                                rows={4}
-                                placeholder="写下你的想法..."
-                                value={inputValue}
-                                onChange={e => setInputValue(e.target.value)}
-                            // Mobile usually doesn't submit on Enter, but we can support it or rely on button
-                            />
-                            <div className="flex justify-end gap-3 mt-2">
-                                <button
+                    title={`评论 (${comments.length})`}
+                    footer={
+                        /* Footer: 输入框区域 */
+                        <div className="p-3 bg-zinc-900 border-t border-zinc-800">
+                            {isInputOpen ? (
+                                // 展开状态：输入框 + 按钮
+                                <div className="flex flex-col gap-3 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                                    {selectedText && (
+                                        <div className="text-xs text-zinc-400 border-l-2 border-yellow-500 pl-2 truncate">
+                                            引用: &quot;{selectedText}&quot;
+                                        </div>
+                                    )}
+                                    <textarea
+                                        autoFocus
+                                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg p-3 text-[16px] text-white resize-none focus:outline-none focus:border-blue-500 placeholder-zinc-500"
+                                        rows={3}
+                                        placeholder="写下你的想法..."
+                                        value={inputValue}
+                                        onChange={e => setInputValue(e.target.value)}
+                                        onBlur={() => {
+                                            // 可选：失去焦点时且无内容则收起？为了体验暂不自动收起，避免误触
+                                        }}
+                                    />
+                                    <div className="flex justify-end gap-3">
+                                        <button
+                                            onClick={() => setIsInputOpen(false)}
+                                            className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white bg-zinc-800"
+                                        >
+                                            取消
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                onSubmit();
+                                                setIsInputOpen(false);
+                                                // setCommentSheetOpen(false); // 保持面板打开，以便查看由自己发送的评论
+                                            }}
+                                            className={`px-5 py-2 rounded-lg text-sm font-medium text-white shadow-lg transition-colors ${inputValue.trim() ? 'bg-blue-600 hover:bg-blue-500' : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                                                }`}
+                                            disabled={!inputValue.trim()}
+                                        >
+                                            发布
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                // 收起状态：伪输入框 (点击展开)
+                                <div
                                     onClick={() => {
-                                        setIsInputOpen(false);
-                                        setCommentSheetOpen(false);
+                                        setIsInputOpen(true);
+                                        // 可以在这里触发震动反馈
                                     }}
-                                    className="px-5 py-2.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-white bg-zinc-800"
+                                    className="w-full bg-zinc-800 border border-zinc-700 rounded-full px-4 py-3 text-sm text-zinc-500 flex items-center gap-2 cursor-text active:scale-[0.99] transition-transform"
                                 >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        onSubmit();
-                                        setIsInputOpen(false);
-                                        setCommentSheetOpen(false); // Close sheet after submit
-                                    }}
-                                    className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white shadow-lg transition-colors ${inputValue.trim() ? 'bg-blue-600 hover:bg-blue-500' : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                                        }`}
-                                    disabled={!inputValue.trim()}
-                                >
-                                    发布
-                                </button>
-                            </div>
+                                    <span className="text-zinc-400">✏️</span>
+                                    <span>写下你的想法...</span>
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        // Regular Comment List Mode
-                        renderCommentsPanel(false)
-                    )}
+                    }
+                >
+                    {/* Body: 始终显示评论列表 */}
+                    {renderCommentsPanel(false)}
                 </BottomSheet>
             </div>
         );
